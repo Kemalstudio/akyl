@@ -1,0 +1,25 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  errors:
+    # Публичный API ядра описан в ТЗ, расхождение с ним — ошибка сборки.
+    invalid_use_of_visible_for_testing_member: error
+    unused_import: error
+
+linter:
+  rules:
+    # Имена в строках — кириллица, а идентификаторы в Dart только ASCII.
+    # Формально скобки лишние, но '${stem}е' читается, а '$stemе' — нет.
+    unnecessary_brace_in_string_interps: false
+
+    # Приватные поля нельзя объявить именованным параметром (this._x),
+    # а все зависимости в проекте передаются именованно.
+    prefer_initializing_formals: false
+
+    prefer_single_quotes: true
+    require_trailing_commas: true
+    avoid_print: true
+    unawaited_futures: true

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Заставка до первого кадра Flutter. Тёмная в обеих темах: приложение
+         тёмное по умолчанию, светлая вспышка при запуске выглядела бы браком. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <!-- Фон окна под UI Flutter, пока он инициализируется. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/akyl_splash_background</item>
+    </style>
+</resources>

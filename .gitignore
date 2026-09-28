@@ -1,0 +1,37 @@
+# Модели: вместе больше 200 МБ, скачиваются tools/fetch_models.ps1
+models/
+
+# Flutter / Dart
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/build/
+app/coverage/
+app/.pub-cache/
+app/.pub/
+**/*.iml
+
+# Android
+app/android/.gradle/
+app/android/local.properties
+app/android/app/debug/
+app/android/key.properties
+*.jks
+*.keystore
+
+# Python
+__pycache__/
+*.py[cod]
+ml/.venv/
+ml/data/
+ml/runs/
+ml/wandb/
+
+# Среда разработки
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Снимки, которые тест оставляет при расхождении
+app/test/**/failures/

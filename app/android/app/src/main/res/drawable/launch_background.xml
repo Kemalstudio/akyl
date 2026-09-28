@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Заставка: фирменный фон и знак по центру. Flutter убирает её, как только
+     отрисует первый кадр, поэтому она повторяет фон экрана приветствия —
+     переход не должен быть заметен. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/akyl_splash_background" />
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/splash_mark" />
+    </item>
+</layer-list>
