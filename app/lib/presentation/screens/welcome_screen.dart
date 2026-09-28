@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../assistant_controller.dart';
+import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 import '../widgets/akyl_mark.dart';
 
@@ -57,56 +58,88 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Spacer(flex: 3),
-              AkylMark(size: 64, color: c.textPrimary),
+              FadeSlideIn(child: AkylMark(size: 64, color: c.textPrimary)),
               const SizedBox(height: 28),
-              Text('akyl',
-                  style: theme.textTheme.displaySmall?.copyWith(fontSize: 38)),
-              const SizedBox(height: 12),
-              Text(
-                'Звонки и сообщения голосом.\nВсё считается на телефоне.',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: c.textSecondary,
-                  fontSize: 16.5,
+              FadeSlideIn(
+                delay: AkylMotion.stagger,
+                child: Text(
+                  'akyl',
+                  style: theme.textTheme.displaySmall?.copyWith(fontSize: 38),
                 ),
               ),
-              const Spacer(flex: 2),
-              const _Point(
-                icon: Icons.cloud_off_rounded,
-                title: 'Работает без интернета',
-                subtitle: 'Распознавание речи идёт на устройстве',
-              ),
-              const _Point(
-                icon: Icons.lock_outline_rounded,
-                title: 'Голос никуда не уходит',
-                subtitle: 'Записи и контакты не покидают телефон',
-              ),
-              const _Point(
-                icon: Icons.bolt_outlined,
-                title: 'Звонок за секунду',
-                subtitle: 'От конца фразы до гудка — меньше секунды',
-              ),
-              const Spacer(flex: 2),
-              if (_denied)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: Text(
-                    'Без доступа к звонкам, SMS и контактам ассистент '
-                    'не сможет выполнить ни одну команду. Разрешения можно '
-                    'выдать в настройках приложения.',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: c.danger),
+              const SizedBox(height: 12),
+              FadeSlideIn(
+                delay: AkylMotion.stagger * 2,
+                child: Text(
+                'Звонки и сообщения голосом.\nВсё считается на телефоне.',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: c.textSecondary,
+                    fontSize: 16.5,
                   ),
                 ),
-              _PrimaryButton(
-                label: _denied ? 'Попробовать ещё раз' : 'Разрешить и начать',
-                busy: _requesting,
-                onPressed: _request,
+              ),
+              const Spacer(flex: 2),
+              FadeSlideIn(
+                delay: AkylMotion.stagger * 3,
+                child: const _Point(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Работает без интернета',
+                  subtitle: 'Распознавание речи идёт на устройстве',
+                ),
+              ),
+              FadeSlideIn(
+                delay: AkylMotion.stagger * 4,
+                child: const _Point(
+                  icon: Icons.lock_outline_rounded,
+                  title: 'Голос никуда не уходит',
+                  subtitle: 'Записи и контакты не покидают телефон',
+                ),
+              ),
+              FadeSlideIn(
+                delay: AkylMotion.stagger * 5,
+                child: const _Point(
+                  icon: Icons.bolt_outlined,
+                  title: 'Звонок за секунду',
+                  subtitle: 'От конца фразы до гудка — меньше секунды',
+                ),
+              ),
+              const Spacer(flex: 2),
+              // Отказ появляется мягко: экран не должен дёргаться в ответ
+              // на действие, которое человек уже воспринял как неудачу.
+              AnimatedSize(
+                duration: AkylMotion.base,
+                curve: AkylMotion.move,
+                alignment: Alignment.topCenter,
+                child: !_denied
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Text(
+                          'Без доступа к звонкам, SMS и контактам ассистент '
+                          'не сможет выполнить ни одну команду. Разрешения '
+                          'можно выдать в настройках приложения.',
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(color: c.danger),
+                        ),
+                      ),
+              ),
+              FadeSlideIn(
+                delay: AkylMotion.stagger * 6,
+                child: _PrimaryButton(
+                  label: _denied ? 'Попробовать ещё раз' : 'Разрешить и начать',
+                  busy: _requesting,
+                  onPressed: _request,
+                ),
               ),
               const SizedBox(height: 14),
-              Center(
-                child: TextButton(
-                  onPressed: _requesting ? null : widget.onReady,
-                  style: TextButton.styleFrom(foregroundColor: c.textMuted),
-                  child: const Text('Посмотреть без разрешений'),
+              FadeSlideIn(
+                delay: AkylMotion.stagger * 7,
+                child: Center(
+                  child: TextButton(
+                    onPressed: _requesting ? null : widget.onReady,
+                    style: TextButton.styleFrom(foregroundColor: c.textMuted),
+                    child: const Text('Посмотреть без разрешений'),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),

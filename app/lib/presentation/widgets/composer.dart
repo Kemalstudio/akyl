@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 
 /// Строка ввода: голос и клавиатура на равных.
@@ -100,8 +101,8 @@ class _ComposerState extends State<Composer> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
+          duration: AkylMotion.quick,
+          curve: AkylMotion.move,
           padding: const EdgeInsets.fromLTRB(18, 4, 4, 4),
           decoration: BoxDecoration(
             color: c.surface,
@@ -117,17 +118,24 @@ class _ComposerState extends State<Composer> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: widget.listening
-                    ? _LiveTranscript(text: widget.partialText)
-                    : _Field(
-                        controller: widget.controller,
-                        focus: _focus,
-                        enabled: !widget.busy,
-                        hint: widget.awaiting
-                            ? 'Ответьте: да или отмена'
-                            : 'Позвони маме',
-                        onSubmitted: _submit,
-                      ),
+                child: SoftSwitcher(
+                  alignment: Alignment.centerLeft,
+                  child: widget.listening
+                      ? _LiveTranscript(
+                          key: const ValueKey('transcript'),
+                          text: widget.partialText,
+                        )
+                      : _Field(
+                          key: const ValueKey('field'),
+                          controller: widget.controller,
+                          focus: _focus,
+                          enabled: !widget.busy,
+                          hint: widget.awaiting
+                              ? 'Ответьте: да или отмена'
+                              : 'Позвони маме',
+                          onSubmitted: _submit,
+                        ),
+                ),
               ),
               const SizedBox(width: 8),
               _ActionButton(
@@ -146,20 +154,37 @@ class _ComposerState extends State<Composer> {
             ],
           ),
         ),
-        SizedBox(height: widget.onCancel != null ? 10 : 0),
-        if (widget.onCancel != null)
-          Align(
-            child: TextButton(
-              onPressed: widget.onCancel,
-              style: TextButton.styleFrom(
-                foregroundColor: c.textSecondary,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text('Отмена'),
-            ),
-          ),
+        // Кнопка отмены не возникает рывком: полоса раздвигается, и текст
+        // проявляется уже в готовом месте.
+        AnimatedSize(
+          duration: AkylMotion.quick,
+          curve: AkylMotion.move,
+          alignment: Alignment.topCenter,
+          child: widget.onCancel == null
+              ? const SizedBox(width: double.infinity, height: 0)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Align(
+                    child: FadeSlideIn(
+                      duration: AkylMotion.quick,
+                      offset: 6,
+                      child: TextButton(
+                        onPressed: widget.onCancel,
+                        style: TextButton.styleFrom(
+                          foregroundColor: c.textSecondary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 6,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text('Отмена'),
+                      ),
+                    ),
+                  ),
+                ),
+        ),
       ],
     );
   }
@@ -167,6 +192,7 @@ class _ComposerState extends State<Composer> {
 
 class _Field extends StatelessWidget {
   const _Field({
+    super.key,
     required this.controller,
     required this.focus,
     required this.enabled,
@@ -210,7 +236,7 @@ class _Field extends StatelessWidget {
 
 /// Распознанный текст во время речи. Пока слов нет — подсказка «Говорите».
 class _LiveTranscript extends StatelessWidget {
-  const _LiveTranscript({required this.text});
+  const _LiveTranscript({super.key, required this.text});
 
   final String text;
 
@@ -342,24 +368,35 @@ class _ActionButtonState extends State<_ActionButton>
                     ),
                   ),
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
+                  duration: AkylMotion.quick,
+                  curve: AkylMotion.move,
                   width: 44,
                   height: 44,
                   decoration:
                       BoxDecoration(color: background, shape: BoxShape.circle),
                   child: Center(
-                    child: widget.busy
-                        ? SizedBox(
-                            width: 17,
-                            height: 17,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation(c.textSecondary),
+                    // Микрофон, стрелка и стоп — одна кнопка: значок меняется
+                    // перетеканием, а не подменой кадра.
+                    child: SoftSwitcher(
+                      duration: AkylMotion.instant,
+                      child: widget.busy
+                          ? SizedBox(
+                              key: const ValueKey('busy'),
+                              width: 17,
+                              height: 17,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation(c.textSecondary),
+                              ),
+                            )
+                          : Icon(
+                              icon,
+                              key: ValueKey(icon),
+                              size: 21,
+                              color: foreground,
                             ),
-                          )
-                        : Icon(icon, size: 21, color: foreground),
+                    ),
                   ),
                 ),
               ],

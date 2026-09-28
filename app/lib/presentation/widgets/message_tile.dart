@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/entities/skill_result.dart';
 import '../assistant_controller.dart';
+import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 import 'akyl_mark.dart';
 
@@ -19,7 +20,14 @@ class MessageTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
-      child: message.fromUser ? _UserLine(message) : _AssistantLine(message),
+      child: FadeSlideIn(
+        // Ключ по времени реплики: список перестраивается на каждый кадр
+        // набора, и без него анимация проигрывалась бы заново.
+        key: ValueKey(message.at),
+        duration: AkylMotion.quick,
+        offset: 10,
+        child: message.fromUser ? _UserLine(message) : _AssistantLine(message),
+      ),
     );
   }
 }

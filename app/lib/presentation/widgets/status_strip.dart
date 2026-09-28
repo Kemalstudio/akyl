@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/dialog/dialog_state.dart';
+import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 
 /// Тонкая строка состояния автомата диалога (ТЗ, раздел 5).
@@ -29,8 +30,8 @@ class StatusStrip extends StatelessWidget {
     };
 
     return AnimatedSize(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
+      duration: AkylMotion.quick,
+      curve: AkylMotion.move,
       alignment: Alignment.topCenter,
       child: label == null
           ? const SizedBox(width: double.infinity, height: 0)
@@ -41,13 +42,17 @@ class StatusStrip extends StatelessWidget {
                   _Pulse(color: color, animated: animated || busy),
                   const SizedBox(width: 8),
                   Flexible(
-                    child: Text(
-                      label,
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelMedium
-                          ?.copyWith(color: color),
-                      overflow: TextOverflow.ellipsis,
+                    child: SoftSwitcher(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        label,
+                        key: ValueKey(label),
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelMedium
+                            ?.copyWith(color: color),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 ],

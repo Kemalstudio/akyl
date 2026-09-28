@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../assistant_controller.dart';
+import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 import '../widgets/akyl_mark.dart';
 import '../widgets/composer.dart';
@@ -47,8 +48,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!_scroll.hasClients) return;
       _scroll.animateTo(
         _scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+        duration: AkylMotion.base,
+        curve: AkylMotion.move,
       );
     });
   }
@@ -92,25 +93,37 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          if (controller.warning != null)
-            _WarningBar(
-              text: controller.warning!,
-              onDismiss: controller.dismissWarning,
-            ),
-          Expanded(
-            child: history.isEmpty
-                ? EmptyState(onPick: _send)
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(
-                      AkylShape.gutter,
-                      18,
-                      AkylShape.gutter,
-                      8,
-                    ),
-                    itemCount: history.length,
-                    itemBuilder: (_, i) => MessageTile(message: history[i]),
+          // Полоса не выталкивает разговор рывком: высота набирается плавно.
+          AnimatedSize(
+            duration: AkylMotion.base,
+            curve: AkylMotion.move,
+            alignment: Alignment.topCenter,
+            child: controller.warning == null
+                ? const SizedBox(width: double.infinity, height: 0)
+                : _WarningBar(
+                    text: controller.warning!,
+                    onDismiss: controller.dismissWarning,
                   ),
+          ),
+          Expanded(
+            child: SoftSwitcher(
+              duration: AkylMotion.base,
+              alignment: Alignment.topCenter,
+              child: history.isEmpty
+                  ? EmptyState(key: const ValueKey('empty'), onPick: _send)
+                  : ListView.builder(
+                      key: const ValueKey('history'),
+                      controller: _scroll,
+                      padding: const EdgeInsets.fromLTRB(
+                        AkylShape.gutter,
+                        18,
+                        AkylShape.gutter,
+                        8,
+                      ),
+                      itemCount: history.length,
+                      itemBuilder: (_, i) => MessageTile(message: history[i]),
+                    ),
+            ),
           ),
           StatusStrip(state: controller.state, busy: controller.busy),
           SafeArea(
@@ -153,6 +166,7 @@ class _WarningBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.akyl;
     return Container(
+      key: const ValueKey('warning'),
       width: double.infinity,
       color: c.surface,
       padding: const EdgeInsets.symmetric(

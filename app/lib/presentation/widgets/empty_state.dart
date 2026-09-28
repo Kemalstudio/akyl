@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 import 'akyl_mark.dart';
 
@@ -37,26 +38,37 @@ class EmptyState extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              AkylMark(size: 44, color: c.textPrimary),
+              // Экран собирается сверху вниз: знак, заголовок, примеры.
+              // Появление всего разом читалось бы как вспышка.
+              FadeSlideIn(child: AkylMark(size: 44, color: c.textPrimary)),
               const SizedBox(height: 22),
-              Text(
-                'Слушаю команду',
-                style: theme.textTheme.displaySmall,
-                textAlign: TextAlign.center,
+              FadeSlideIn(
+                delay: AkylMotion.stagger,
+                child: Text(
+                  'Слушаю команду',
+                  style: theme.textTheme.displaySmall,
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 10),
-              Text(
-                'Звонки и сообщения голосом.\nБез интернета, без отправки записи наружу.',
-                style: theme.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
+              FadeSlideIn(
+                delay: AkylMotion.stagger * 2,
+                child: Text(
+                  'Звонки и сообщения голосом.\nБез интернета, без отправки записи наружу.',
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 30),
-              for (final example in _examples)
+              for (final (index, example) in _examples.indexed)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _ExampleCard(
-                    text: example,
-                    onTap: () => onPick(example),
+                  child: FadeSlideIn(
+                    delay: AkylMotion.stagger * (3 + index),
+                    child: _ExampleCard(
+                      text: example,
+                      onTap: () => onPick(example),
+                    ),
                   ),
                 ),
             ],
