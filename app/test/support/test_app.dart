@@ -20,6 +20,7 @@ Future<AssistantController> buildTestController({
   InMemoryContactsSource? contacts,
   FakePhone? phone,
   FakeTts? tts,
+  FakeStt? stt,
 }) async {
   final p = phone ?? FakePhone();
   final index = ContactIndex(contacts ?? InMemoryContactsSource.demo());
@@ -37,6 +38,7 @@ Future<AssistantController> buildTestController({
     machine: machine,
     resolver: index,
     tts: tts ?? FakeTts(),
+    stt: stt ?? FakeStt(),
     phone: p,
   );
   await controller.init();

@@ -26,10 +26,17 @@ void main() {
     Widget screen,
     String name, {
     Brightness brightness = Brightness.dark,
+    bool settle = true,
   }) async {
     await setPhoneSurface(tester);
     await tester.pumpWidget(wrapForTest(screen, brightness: brightness));
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      // Пока идёт запись, кольцо вокруг кнопки пульсирует без конца —
+      // pumpAndSettle такого не дождётся. Останавливаем кадр вручную.
+      await tester.pump(const Duration(milliseconds: 350));
+    }
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/$name.png'),

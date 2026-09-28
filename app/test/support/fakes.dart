@@ -3,7 +3,10 @@ import 'package:akyl/data/contacts/in_memory_contacts_source.dart';
 import 'package:akyl/data/contacts/spoken_choice_resolver.dart';
 import 'package:akyl/data/nlu/rule_based_nlu.dart';
 import 'package:akyl/domain/dialog/dialog_machine.dart';
+import 'dart:async';
+
 import 'package:akyl/domain/ports/phone.dart';
+import 'package:akyl/domain/ports/speech_to_text.dart';
 import 'package:akyl/domain/ports/text_to_speech.dart';
 import 'package:akyl/skills/call_skill.dart';
 import 'package:akyl/skills/sms_skill.dart';
@@ -39,6 +42,78 @@ class FakePhone implements Phone {
       sentSms.add((number: number, text: text));
 }
 
+/// Микрофон, которым управляет тест: [emitPartial] печатает текст «по слогам»,
+/// [finish] закрывает фразу — как это делает настоящий движок.
+class FakeStt implements SpeechToText {
+  FakeStt({this.failOnInit = false, this.scripted});
+
+  /// Движок не запускается — проверка, что приложение это переживает.
+  final bool failOnInit;
+
+  /// Что «услышать» автоматически при start(). null — тест управляет вручную.
+  final String? scripted;
+
+  final _partial = StreamController<String>.broadcast();
+
+  /// Как и в настоящей реализации, ожидание переживает своё завершение:
+  /// результат может прийти раньше, чем его спросят.
+  Completer<String>? _pending;
+  bool _active = false;
+
+  bool initialized = false;
+  int startCount = 0;
+  bool stopped = false;
+  bool disposed = false;
+
+  @override
+  Future<void> init() async {
+    if (failOnInit) throw StateError('нет офлайн-движка');
+    initialized = true;
+  }
+
+  @override
+  Stream<String> partialResults() => _partial.stream;
+
+  @override
+  Future<void> start() async {
+    if (_active) return;
+    startCount++;
+    _active = true;
+    _pending = Completer<String>();
+    final text = scripted;
+    if (text != null) {
+      emitPartial(text);
+      finish(text);
+    }
+  }
+
+  @override
+  Future<String> finalResult() => _pending?.future ?? Future.value('');
+
+  @override
+  Future<void> stop() async {
+    stopped = true;
+    finish('');
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposed = true;
+    if (!_partial.isClosed) await _partial.close();
+  }
+
+  void emitPartial(String text) {
+    if (!_partial.isClosed) _partial.add(text);
+  }
+
+  void finish(String text) {
+    _active = false;
+    final pending = _pending;
+    if (pending == null || pending.isCompleted) return;
+    pending.complete(text);
+  }
+}
+
 class FakeTts implements TextToSpeech {
   final List<String> spoken = [];
   bool _enabled = true;
@@ -58,7 +133,9 @@ class FakeTts implements TextToSpeech {
   }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stopCount++;
+
+  int stopCount = 0;
 }
 
 /// Собранный ассистент этапа 1 — всё настоящее, кроме телефона.

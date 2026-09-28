@@ -53,10 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _send(String text) async {
-    widget.controller.startListening();
-    await widget.controller.submit(text);
-  }
+  Future<void> _send(String text) async => widget.controller.submit(text);
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +92,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          if (controller.warning != null) _WarningBar(text: controller.warning!),
+          if (controller.warning != null)
+            _WarningBar(
+              text: controller.warning!,
+              onDismiss: controller.dismissWarning,
+            ),
           Expanded(
             child: history.isEmpty
                 ? EmptyState(onPick: _send)
@@ -124,8 +125,13 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Composer(
                 controller: _input,
                 onSubmit: _send,
+                onListen: controller.listen,
+                onStopListening: controller.stopListening,
                 busy: controller.busy,
-                listening: awaiting,
+                listening: controller.listening,
+                awaiting: awaiting,
+                voiceAvailable: controller.voiceAvailable,
+                partialText: controller.partialText,
                 onCancel: awaiting ? controller.cancel : null,
               ),
             ),
@@ -138,9 +144,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
 /// Контакты недоступны — ассистент запустится, но найти никого не сможет.
 class _WarningBar extends StatelessWidget {
-  const _WarningBar({required this.text});
+  const _WarningBar({required this.text, required this.onDismiss});
 
   final String text;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -164,6 +171,11 @@ class _WarningBar extends StatelessWidget {
                   .labelMedium
                   ?.copyWith(color: c.textSecondary),
             ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onDismiss,
+            child: Icon(Icons.close_rounded, size: 16, color: c.textMuted),
           ),
         ],
       ),

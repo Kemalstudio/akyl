@@ -26,6 +26,9 @@ class PhoneBridge(private val activity: Activity) : MethodChannel.MethodCallHand
             Manifest.permission.CALL_PHONE,
             Manifest.permission.SEND_SMS,
             Manifest.permission.READ_CONTACTS,
+            // Распознавание речи (ТЗ, FR-2). Спрашивается вместе с остальными,
+            // чтобы человек прошёл один диалог, а не четыре подряд.
+            Manifest.permission.RECORD_AUDIO,
         )
     }
 

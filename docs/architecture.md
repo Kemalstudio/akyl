@@ -32,7 +32,7 @@
 
 | Интерфейс | Этап 1 | Дальше |
 |---|---|---|
-| `SpeechToText` | `ManualTextStt` (клавиатура) | `TOneStt` через sherpa-onnx |
+| `SpeechToText` | `DeviceSpeechStt` (движок Android, офлайн) | `TOneStt` через sherpa-onnx |
 | `Nlu` | `RuleBasedNlu` | `MlNlu` — своя модель |
 | `TextToSpeech` | `SystemTts` (Android) | Piper ru_RU |
 | `ContactResolver` | `ContactIndex` | без изменений |

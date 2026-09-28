@@ -66,6 +66,13 @@ class DialogMachine {
   /// Пользователь нажал кнопку или сказал фразу активации (ТЗ, FR-1).
   void startListening() => _transition(DialogState.listening);
 
+  /// Микрофон закрылся, а фразы не было: вернуться в покой, не поднимая
+  /// разговор. Без этого автомат завис бы в listening до следующей команды.
+  void abortListening() {
+    if (_state != DialogState.listening) return;
+    _transition(DialogState.idle);
+  }
+
   /// Основной вход: распознанная фраза целиком.
   Future<DialogTurn> handle(String recognizedText) async {
     _transition(DialogState.processing);

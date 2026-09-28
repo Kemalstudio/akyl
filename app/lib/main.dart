@@ -5,6 +5,7 @@ import 'data/contacts/device_contacts_source.dart';
 import 'data/contacts/spoken_choice_resolver.dart';
 import 'data/nlu/rule_based_nlu.dart';
 import 'data/phone/phone_bridge.dart';
+import 'data/stt/device_speech_stt.dart';
 import 'data/tts/system_tts.dart';
 import 'domain/dialog/dialog_machine.dart';
 import 'presentation/assistant_controller.dart';
@@ -40,6 +41,7 @@ AssistantController buildController() {
     machine: machine,
     resolver: resolver,
     tts: SystemTts(),
+    stt: DeviceSpeechStt(),
     phone: phone,
   );
 }

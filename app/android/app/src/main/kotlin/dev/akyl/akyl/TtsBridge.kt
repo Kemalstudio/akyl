@@ -1,21 +1,35 @@
 package dev.akyl.akyl
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.Locale
 
 /**
  * Голосовой ответ встроенным движком Android (ТЗ, раздел 4: TTS, старт).
- * Ничего не весит и работает офлайн, если в системе установлен русский голос.
- * Piper ru_RU заменит это в v1.0 — на стороне Dart интерфейс тот же.
+ *
+ * Качество здесь решает не движок, а выбор голоса: в системе обычно стоит
+ * несколько русских, и по умолчанию берётся не лучший. Поэтому голос
+ * выбирается явно — самый качественный из тех, что не ходят в сеть.
+ *
+ * Темп чуть медленнее и тон чуть ниже обычного: ассистент проговаривает
+ * короткие фразы вроде «Звоню Маме», и на них стандартная скорость звучит
+ * тараторящей.
  */
 class TtsBridge(private val context: Context) : MethodChannel.MethodCallHandler {
 
     companion object {
         const val CHANNEL = "dev.akyl/tts"
         private const val UTTERANCE_ID = "akyl"
+
+        /** Медленнее обычного: короткую фразу нужно успеть разобрать. */
+        private const val DEFAULT_RATE = 0.94f
+
+        /** Чуть ниже обычного: звучит спокойнее, без «мультяшности». */
+        private const val DEFAULT_PITCH = 0.96f
     }
 
     private var tts: TextToSpeech? = null
@@ -24,10 +38,15 @@ class TtsBridge(private val context: Context) : MethodChannel.MethodCallHandler 
     /** Фраза, произнесённая до того, как движок успел инициализироваться. */
     private var queued: String? = null
 
+    private var rate = DEFAULT_RATE
+    private var pitch = DEFAULT_PITCH
+
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "init" -> {
                 val locale = call.argument<String>("locale") ?: "ru_RU"
+                rate = (call.argument<Double>("rate") ?: DEFAULT_RATE.toDouble()).toFloat()
+                pitch = (call.argument<Double>("pitch") ?: DEFAULT_PITCH.toDouble()).toFloat()
                 init(locale)
                 result.success(null)
             }
@@ -48,6 +67,9 @@ class TtsBridge(private val context: Context) : MethodChannel.MethodCallHandler 
                 result.success(null)
             }
 
+            /** Какой голос выбран — показывается в настройках приложения. */
+            "voiceName" -> result.success(tts?.voice?.name)
+
             else -> result.notImplemented()
         }
     }
@@ -59,12 +81,47 @@ class TtsBridge(private val context: Context) : MethodChannel.MethodCallHandler 
         }
         tts = TextToSpeech(context) { status ->
             ready = status == TextToSpeech.SUCCESS
-            if (ready) {
-                tts?.language = locale
-                queued?.let { speak(it) }
-                queued = null
+            if (!ready) return@TextToSpeech
+
+            tts?.apply {
+                language = locale
+                setSpeechRate(rate)
+                setPitch(pitch)
+                // Голос ассистента, а не музыка: система сама приглушит
+                // под него плеер и направит в нужный выход.
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                bestVoiceFor(this, locale)?.let { voice = it }
             }
+
+            queued?.let { speak(it) }
+            queued = null
         }
+    }
+
+    /**
+     * Лучший голос для языка: сначала отсекаются требующие сети, затем
+     * выбирается самый высокий заявленный уровень качества.
+     *
+     * Сетевой голос отбрасывается не ради качества, а ради обещания из ТЗ:
+     * приложение работает офлайн, и ответ не должен зависеть от связи.
+     */
+    private fun bestVoiceFor(engine: TextToSpeech, locale: Locale): Voice? {
+        val voices = try {
+            engine.voices
+        } catch (e: Exception) {
+            null
+        } ?: return null
+
+        return voices
+            .filter { it.locale.language == locale.language }
+            .filterNot { it.isNetworkConnectionRequired }
+            .filterNot { it.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) }
+            .maxByOrNull { it.quality }
     }
 
     private fun speak(text: String) {
