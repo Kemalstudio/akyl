@@ -19,13 +19,15 @@ class CallSkill implements Skill {
     required ContactResolver resolver,
     required Phone phone,
     RussianMorphology morphology = const RussianMorphology(),
-  })  : _resolver = resolver,
-        _phone = phone,
-        _morphology = morphology;
+    this.beforeCall,
+  }) : _resolver = resolver,
+       _phone = phone,
+       _morphology = morphology;
 
   final ContactResolver _resolver;
   final Phone _phone;
   final RussianMorphology _morphology;
+  final Future<void> Function(String response)? beforeCall;
 
   @override
   Intent get intent => Intent.call;
@@ -40,13 +42,22 @@ class CallSkill implements Skill {
     final requestedType = _parsePhoneType(result.slot(Slot.phoneType));
     final speaker = result.slot(Slot.speaker) == 'true';
 
-    final lookup = await lookupContact(_resolver, spokenName);
+    final lookup = await lookupContact(
+      _resolver,
+      spokenName,
+      contactId: result.slot(Slot.contactId),
+    );
     return switch (lookup) {
       LookupNotFound() => SkillResult.failed('Не нашёл контакт $spokenName'),
-      LookupAmbiguous(matches: final matches) =>
-        SkillResult.needsChoice(_askWhich(matches), matches),
-      LookupFound(match: final match) =>
-        await _placeCall(match, requestedType, speaker),
+      LookupAmbiguous(matches: final matches) => SkillResult.needsChoice(
+        _askWhich(matches),
+        matches,
+      ),
+      LookupFound(match: final match) => await _placeCall(
+        match,
+        requestedType,
+        speaker,
+      ),
     };
   }
 
@@ -70,7 +81,9 @@ class CallSkill implements Skill {
     } else {
       number = contact.primaryPhone;
       if (number == null) {
-        return SkillResult.failed('У контакта ${contact.displayName} нет номера');
+        return SkillResult.failed(
+          'У контакта ${contact.displayName} нет номера',
+        );
       }
     }
 
@@ -78,14 +91,19 @@ class CallSkill implements Skill {
       return SkillResult.failed('Нужно разрешение на звонки');
     }
 
-    await _phone.call(number.number, speaker: speaker);
-
     // Ответ повторяет всё, что ассистент понял: имя, номер и громкую связь.
     // Если он понял не так, человек услышит это раньше, чем пойдёт гудок.
     final parts = <String>['Звоню ${_morphology.dative(contact.displayName)}'];
     if (requested != null) parts.add(requested.spokenRu);
     if (speaker) parts.add('по громкой связи');
-    return SkillResult.done(parts.join(', '), contact: contact);
+    final response = parts.join(', ');
+    await beforeCall?.call('Хорошо. $response');
+    await _phone.call(number.number, speaker: speaker);
+    return SkillResult.done(
+      response,
+      contact: contact,
+      alreadySpoken: beforeCall != null,
+    );
   }
 
   /// «Какому Ахмеду: Ахмед Работа или Ахмед Брат?» (ТЗ, сценарий С5).
