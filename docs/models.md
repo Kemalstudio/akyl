@@ -1,5 +1,29 @@
 # Модели: что скачать и куда положить
 
+## Сборка APK со своим распознаванием (T-one)
+
+Модели едут внутри APK (~146 МБ), при первом запуске копируются в папку
+приложения. Интернет приложению не нужен.
+
+1. Скачать модели (ниже) и положить копии в `app/assets/models/`:
+   `tone.onnx` (= `model.onnx` из архива T-one), `tokens.txt`,
+   `silero_vad.onnx`. Папка в `.gitignore`.
+2. `flutter pub get`, затем
+   `powershell -ExecutionPolicy Bypass -File tools\copy_sherpa_libs.ps1` —
+   нативные библиотеки sherpa-onnx в локальный пакет
+   `app/packages/sherpa_onnx_android_arm64` (почему локальный — см.
+   `dependency_overrides` в `app/pubspec.yaml`).
+3. `flutter build apk --release --target-platform android-arm64`.
+
+Если моделей в APK нет или телефон не arm64, приложение само переходит на
+системное распознавание Android (`FallbackStt` в `app/lib/main.dart`).
+
+Как устроено: микрофон пишет 16 кГц (`MicBridge.kt`), Silero VAD слушает
+постоянно, T-one включается только на речь — поэтому ожидание «Макс»
+почти не тратит батарею. sherpa-onnx сама понижает звук до 8 кГц для T-one.
+Код — `app/lib/data/stt/tone_stt.dart` и `tone_worker.dart`.
+
+
 Скачивание:
 
 ```powershell
