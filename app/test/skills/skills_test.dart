@@ -116,20 +116,23 @@ void main() {
       expect(a.phone.sentSms, isEmpty);
     });
 
-    test('уточнение адресата тоже требует подтверждения после выбора', () async {
-      final a = await TestAssistant.build(
-        contacts: InMemoryContactsSource.twoAhmeds(),
-      );
+    test(
+      'уточнение адресата тоже требует подтверждения после выбора',
+      () async {
+        final a = await TestAssistant.build(
+          contacts: InMemoryContactsSource.twoAhmeds(),
+        );
 
-      final ask = await a.say('напиши ахмеду что я опаздываю');
-      expect(ask.status, SkillStatus.needsChoice);
+        final ask = await a.say('напиши ахмеду что я опаздываю');
+        expect(ask.status, SkillStatus.needsChoice);
 
-      final afterChoice = await a.say('брату');
-      expect(afterChoice.status, SkillStatus.needsConfirmation);
-      expect(a.phone.sentSms, isEmpty);
+        final afterChoice = await a.say('брату');
+        expect(afterChoice.status, SkillStatus.needsConfirmation);
+        expect(a.phone.sentSms, isEmpty);
 
-      await a.say('да');
-      expect(a.phone.sentSms.single.number, '+99361000003');
-    });
+        await a.say('да');
+        expect(a.phone.sentSms.single.number, '+99361000003');
+      },
+    );
   });
 }
