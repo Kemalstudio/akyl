@@ -51,35 +51,37 @@ class AkylColors extends ThemeExtension<AkylColors> {
   final Color action;
   final Color onAction;
 
+  // Нейтральная палитра, как у ChatGPT и Claude: графит вместо цвета,
+  // фиолетовый — только акцент. Спокойный фон не спорит с текстом.
   static const AkylColors dark = AkylColors(
-    background: Color(0xFF0B0C0E),
-    surface: Color(0xFF16181B),
-    surfaceRaised: Color(0xFF1E2125),
-    border: Color(0xFF24272C),
-    borderStrong: Color(0xFF32363C),
-    textPrimary: Color(0xFFECEDEE),
-    textSecondary: Color(0xFF9BA1A6),
-    textMuted: Color(0xFF6B7075),
-    accent: Color(0xFF59D3B8),
-    accentMuted: Color(0xFF1C3B36),
-    danger: Color(0xFFE5776B),
-    action: Color(0xFFECEDEE),
-    onAction: Color(0xFF0B0C0E),
+    background: Color(0xFF09081A),
+    surface: Color(0xFF161431),
+    surfaceRaised: Color(0xFF211E42),
+    border: Color(0xFF2E2A58),
+    borderStrong: Color(0xFF4A4485),
+    textPrimary: Color(0xFFF1F0FA),
+    textSecondary: Color(0xFFBDB9DC),
+    textMuted: Color(0xFF8E89B5),
+    accent: Color(0xFFA78BFA),
+    accentMuted: Color(0xFF2A2352),
+    danger: Color(0xFFF58A9B),
+    action: Color(0xFFF1F0FA),
+    onAction: Color(0xFF09081A),
   );
 
   static const AkylColors light = AkylColors(
     background: Color(0xFFFFFFFF),
-    surface: Color(0xFFF4F5F6),
-    surfaceRaised: Color(0xFFEAECEE),
-    border: Color(0xFFE3E5E8),
-    borderStrong: Color(0xFFCFD3D8),
-    textPrimary: Color(0xFF0E1014),
-    textSecondary: Color(0xFF5E6469),
-    textMuted: Color(0xFF8A9096),
-    accent: Color(0xFF12806B),
-    accentMuted: Color(0xFFDCEFEA),
-    danger: Color(0xFFB4382A),
-    action: Color(0xFF0E1014),
+    surface: Color(0xFFF4F4F5),
+    surfaceRaised: Color(0xFFEAEAEC),
+    border: Color(0xFFE4E4E7),
+    borderStrong: Color(0xFFC9C9CF),
+    textPrimary: Color(0xFF0D0D0F),
+    textSecondary: Color(0xFF52525B),
+    textMuted: Color(0xFF7C7C86),
+    accent: Color(0xFF6D4AE0),
+    accentMuted: Color(0xFFEFEAFE),
+    danger: Color(0xFFC0392B),
+    action: Color(0xFF0D0D0F),
     onAction: Color(0xFFFFFFFF),
   );
 
@@ -173,55 +175,68 @@ abstract final class AkylTheme {
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
       statusBarBrightness: dark ? Brightness.dark : Brightness.light,
-      systemNavigationBarColor:
-          dark ? AkylColors.dark.background : AkylColors.light.background,
-      systemNavigationBarIconBrightness:
-          dark ? Brightness.light : Brightness.dark,
+      systemNavigationBarColor: dark
+          ? AkylColors.dark.background
+          : AkylColors.light.background,
+      systemNavigationBarIconBrightness: dark
+          ? Brightness.light
+          : Brightness.dark,
       systemNavigationBarDividerColor: Colors.transparent,
     );
   }
 
+  /// Nunito: скруглённый гротеск. Системный Roboto звучит по-канцелярски,
+  /// а ассистент разговаривает с человеком — шрифт должен быть мягче.
+  static const String fontFamily = 'Nunito';
+
   static ThemeData _build(AkylColors c, Brightness brightness) {
-    final base = ThemeData(brightness: brightness, useMaterial3: true);
+    final base = ThemeData(
+      brightness: brightness,
+      useMaterial3: true,
+      fontFamily: fontFamily,
+    );
 
     // Плотная, слегка сжатая типографика: так экран читается как документ,
     // а не как набор кнопок.
     final text = base.textTheme.copyWith(
+      // Nunito шире и круглее Roboto, поэтому трекинг чуть плотнее,
+      // а межстрочный интервал чуть больше — иначе строки слипаются.
       displaySmall: TextStyle(
         fontSize: 30,
-        height: 1.15,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.8,
+        height: 1.2,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.6,
         color: c.textPrimary,
       ),
       titleMedium: TextStyle(
         fontSize: 17,
-        height: 1.3,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.3,
+        height: 1.35,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
         color: c.textPrimary,
       ),
       bodyLarge: TextStyle(
         fontSize: 15.5,
-        height: 1.45,
+        height: 1.5,
+        fontWeight: FontWeight.w400,
         color: c.textPrimary,
       ),
       bodyMedium: TextStyle(
         fontSize: 14.5,
-        height: 1.45,
+        height: 1.5,
+        fontWeight: FontWeight.w400,
         color: c.textSecondary,
       ),
       labelLarge: TextStyle(
         fontSize: 14,
-        height: 1.2,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.1,
+        height: 1.25,
+        fontWeight: FontWeight.w700,
         color: c.textPrimary,
       ),
       labelMedium: TextStyle(
         fontSize: 12.5,
-        height: 1.2,
-        fontWeight: FontWeight.w500,
+        height: 1.25,
+        fontWeight: FontWeight.w600,
         letterSpacing: 0.1,
         color: c.textSecondary,
       ),
@@ -235,7 +250,10 @@ abstract final class AkylTheme {
         secondary: c.accent,
         error: c.danger,
       ),
-      textTheme: text,
+      // apply, а не просто text: заданные ниже TextStyle создаются с нуля и
+      // семейство из ThemeData не наследуют — без этой строки Nunito
+      // применялся бы только к стилям, которые мы не переопределили.
+      textTheme: text.apply(fontFamily: fontFamily),
       splashFactory: InkSparkle.splashFactory,
       extensions: [c],
       appBarTheme: AppBarTheme(
