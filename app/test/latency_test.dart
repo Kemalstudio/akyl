@@ -17,20 +17,18 @@ void main() {
 
   /// Книга размером с реальную: 500 контактов.
   InMemoryContactsSource bigBook() => InMemoryContactsSource([
-        for (var i = 0; i < 500; i++)
-          Contact(
-            id: '$i',
-            displayName: '${_names[i % _names.length]} $i',
-            phones: [
-              PhoneNumber(number: '+9936100$i', type: PhoneType.mobile),
-            ],
-          ),
-        const Contact(
-          id: 'mama',
-          displayName: 'Мама',
-          phones: [PhoneNumber(number: '+99361000001', type: PhoneType.mobile)],
-        ),
-      ]);
+    for (var i = 0; i < 500; i++)
+      Contact(
+        id: '$i',
+        displayName: '${_names[i % _names.length]} $i',
+        phones: [PhoneNumber(number: '+9936100$i', type: PhoneType.mobile)],
+      ),
+    const Contact(
+      id: 'mama',
+      displayName: 'Мама',
+      phones: [PhoneNumber(number: '+99361000001', type: PhoneType.mobile)],
+    ),
+  ]);
 
   double p95(List<int> micros) {
     final sorted = [...micros]..sort();
@@ -107,6 +105,18 @@ void main() {
 }
 
 const _names = [
-  'Ахмед', 'Мерет', 'Гурбан', 'Ольга', 'Мария', 'Сергей', 'Айна', 'Бахтияр',
-  'Джумагуль', 'Нурмухаммет', 'Михаил', 'Екатерина', 'Огулджан', 'Сапар',
+  'Ахмед',
+  'Мерет',
+  'Гурбан',
+  'Ольга',
+  'Мария',
+  'Сергей',
+  'Айна',
+  'Бахтияр',
+  'Джумагуль',
+  'Нурмухаммет',
+  'Михаил',
+  'Екатерина',
+  'Огулджан',
+  'Сапар',
 ];
