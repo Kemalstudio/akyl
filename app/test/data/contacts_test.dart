@@ -14,7 +14,10 @@ void main() {
     const m = RussianMorphology();
 
     test('женское имя на -а', () {
-      expect(m.inflections('мама'), containsAll(['мама', 'мамы', 'маме', 'маму']));
+      expect(
+        m.inflections('мама'),
+        containsAll(['мама', 'мамы', 'маме', 'маму']),
+      );
     });
 
     test('мужское имя на согласную', () {
@@ -30,7 +33,10 @@ void main() {
     });
 
     test('имя на -й склоняется мягко', () {
-      expect(m.inflections('андрей'), containsAll(['андрея', 'андрею', 'андреем']));
+      expect(
+        m.inflections('андрей'),
+        containsAll(['андрея', 'андрею', 'андреем']),
+      );
     });
 
     test('несклоняемое имя остаётся как есть', () {
@@ -103,7 +109,10 @@ void main() {
     });
 
     test('краткая форма находит полные имена', () {
-      expect(Diminutives.expandsTo('саша'), containsAll(['александр', 'александра']));
+      expect(
+        Diminutives.expandsTo('саша'),
+        containsAll(['александр', 'александра']),
+      );
     });
   });
 
