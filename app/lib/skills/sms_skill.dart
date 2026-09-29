@@ -15,8 +15,8 @@ import 'contact_lookup.dart';
 /// раз, уже из ожидающего подтверждения, отправляет.
 class SmsSkill implements Skill {
   SmsSkill({required ContactResolver resolver, required Phone phone})
-      : _resolver = resolver,
-        _phone = phone;
+    : _resolver = resolver,
+      _phone = phone;
 
   final ContactResolver _resolver;
   final Phone _phone;
@@ -36,13 +36,23 @@ class SmsSkill implements Skill {
       return SkillResult.failed('Кому написать?');
     }
 
-    final lookup = await lookupContact(_resolver, spokenName);
+    final lookup = await lookupContact(
+      _resolver,
+      spokenName,
+      contactId: result.slot(Slot.contactId),
+    );
     return switch (lookup) {
       LookupNotFound() => SkillResult.failed('Не нашёл контакт $spokenName'),
-      LookupAmbiguous(matches: final matches) =>
-        SkillResult.needsChoice(_askWhich(matches), matches),
-      LookupFound(match: final match) =>
-        await _confirmOrSend(match.contact, message, result, ctx),
+      LookupAmbiguous(matches: final matches) => SkillResult.needsChoice(
+        _askWhich(matches),
+        matches,
+      ),
+      LookupFound(match: final match) => await _confirmOrSend(
+        match.contact,
+        message,
+        result,
+        ctx,
+      ),
     };
   }
 
