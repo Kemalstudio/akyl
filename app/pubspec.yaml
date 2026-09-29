@@ -36,10 +36,18 @@ dependencies:
   # Заменяется на sherpa-onnx + T-one, см. docs/speech.md.
   speech_to_text: ^7.4.0
 
+  # Анимированные иконки и иллюстрации (файлы LottieFiles).
+  lottie: ^3.3.0
+
+  # Куда писать историю разговоров: каталог документов приложения.
+  path_provider: ^2.1.0
+  shared_preferences: ^2.5.3
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-
+  sherpa_onnx: ^1.13.8
+  lucide_icons_flutter: ^3.1.20
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -56,11 +64,31 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/lottie/
+    # Своё распознавание: T-one + Silero VAD (~146 МБ, в git не хранятся —
+    # см. docs/models.md).
+    - assets/models/
+
+  fonts:
+    # Nunito: скруглённый гротеск, мягче системного Roboto. Ассистент
+    # разговаривает с человеком, и шрифт должен звучать так же.
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/Nunito-300.ttf
+          weight: 300
+        - asset: assets/fonts/Nunito-400.ttf
+          weight: 400
+        - asset: assets/fonts/Nunito-500.ttf
+          weight: 500
+        - asset: assets/fonts/Nunito-600.ttf
+          weight: 600
+        - asset: assets/fonts/Nunito-700.ttf
+          weight: 700
+        - asset: assets/fonts/Nunito-800.ttf
+          weight: 800
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -92,3 +120,17 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# sherpa-onnx с pub.dev объявляет в своих Android-пакетах AGP 7.3.0, и Gradle
+# тянет его зависимости из Maven Central. Здесь локальные копии: arm64 — те же
+# .so без устаревшего buildscript, остальные архитектуры — пустые заглушки.
+# .so копирует tools/copy_sherpa_libs.ps1 (см. docs/models.md).
+dependency_overrides:
+  sherpa_onnx_android_arm64:
+    path: packages/sherpa_onnx_android_arm64
+  sherpa_onnx_android_armeabi:
+    path: packages/sherpa_onnx_android_armeabi
+  sherpa_onnx_android_x86:
+    path: packages/sherpa_onnx_android_x86
+  sherpa_onnx_android_x86_64:
+    path: packages/sherpa_onnx_android_x86_64
