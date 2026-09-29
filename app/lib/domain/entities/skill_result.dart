@@ -7,9 +7,11 @@ class SkillResult {
     required this.spokenResponse,
     this.contact,
     this.choices = const [],
+    this.alreadySpoken = false,
   });
 
   final SkillStatus status;
+  final bool alreadySpoken;
 
   /// Текст для TTS и для чата на экране (ТЗ, FR-10, FR-11).
   final String spokenResponse;
@@ -20,12 +22,16 @@ class SkillResult {
   /// Варианты для уточнения, если status == needsChoice.
   final List<ContactMatch> choices;
 
-  factory SkillResult.done(String response, {Contact? contact}) =>
-      SkillResult(
-        status: SkillStatus.done,
-        spokenResponse: response,
-        contact: contact,
-      );
+  factory SkillResult.done(
+    String response, {
+    Contact? contact,
+    bool alreadySpoken = false,
+  }) => SkillResult(
+    status: SkillStatus.done,
+    alreadySpoken: alreadySpoken,
+    spokenResponse: response,
+    contact: contact,
+  );
 
   factory SkillResult.needsConfirmation(String response, {Contact? contact}) =>
       SkillResult(
@@ -37,17 +43,14 @@ class SkillResult {
   factory SkillResult.needsChoice(
     String response,
     List<ContactMatch> choices,
-  ) =>
-      SkillResult(
-        status: SkillStatus.needsChoice,
-        spokenResponse: response,
-        choices: choices,
-      );
+  ) => SkillResult(
+    status: SkillStatus.needsChoice,
+    spokenResponse: response,
+    choices: choices,
+  );
 
-  factory SkillResult.failed(String response) => SkillResult(
-        status: SkillStatus.failed,
-        spokenResponse: response,
-      );
+  factory SkillResult.failed(String response) =>
+      SkillResult(status: SkillStatus.failed, spokenResponse: response);
 
   @override
   String toString() => 'SkillResult($status, "$spokenResponse")';
