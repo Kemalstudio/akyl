@@ -54,6 +54,10 @@ class DialogMachine {
   final ChoiceResolver _choiceResolver;
   final Map<Intent, Skill> _skills;
 
+  /// Проверка перед выполнением: вернуть текст отказа или null. Так
+  /// помощник не читает SMS и журнал звонков при заблокированном экране.
+  String? Function(Intent intent)? guard;
+
   final DialogContext context;
 
   DialogState _state = DialogState.idle;
@@ -259,6 +263,18 @@ class DialogMachine {
   }) async {
     final skill = _skills[result.intent];
     if (skill == null) return _unknown(text, result);
+
+    final refusal = guard?.call(result.intent);
+    if (refusal != null) {
+      _transition(DialogState.idle);
+      return DialogTurn(
+        recognizedText: text,
+        response: refusal,
+        state: _state,
+        status: SkillStatus.failed,
+        nlu: nluForLog ?? result,
+      );
+    }
 
     // Команды без адресата — «который час» — отвечают сразу: уточнять
     // там нечего.
