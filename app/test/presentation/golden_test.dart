@@ -1,4 +1,5 @@
 import 'package:akyl/data/contacts/in_memory_contacts_source.dart';
+import 'package:akyl/presentation/screens/assistant_settings.dart';
 import 'package:akyl/presentation/screens/home_screen.dart';
 import 'package:akyl/presentation/screens/welcome_screen.dart';
 import 'package:flutter/material.dart';
@@ -85,5 +86,21 @@ void main() {
     await controller.submit('напиши мерет что я опаздываю');
 
     await snapshot(tester, HomeScreen(controller: controller), 'home_confirm');
+  }, skip: !fonts);
+
+  testWidgets('Настройки помощника', (tester) async {
+    final controller = await buildTestController();
+    await snapshot(
+      tester,
+      AssistantSettings(controller: controller),
+      'settings',
+    );
+  }, skip: !fonts);
+
+  testWidgets('Простой режим для родителей', (tester) async {
+    final controller = await buildTestController(simpleMode: true);
+    await controller.rememberRelationship('мама', '1');
+    await controller.rememberRelationship('брат', '3');
+    await snapshot(tester, HomeScreen(controller: controller), 'home_simple');
   }, skip: !fonts);
 }
