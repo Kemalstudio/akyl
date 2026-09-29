@@ -10,13 +10,20 @@ class RussianMorphology {
   const RussianMorphology();
 
   static const Set<String> _vowels = {
-    'а', 'е', 'ё', 'и', 'о', 'у', 'ы', 'э', 'ю', 'я'
+    'а',
+    'е',
+    'ё',
+    'и',
+    'о',
+    'у',
+    'ы',
+    'э',
+    'ю',
+    'я',
   };
 
   /// Шипящие и к/г/х: после них в родительном пишется «и», а не «ы».
-  static const Set<String> _hushAndVelar = {
-    'ж', 'ш', 'ч', 'щ', 'к', 'г', 'х'
-  };
+  static const Set<String> _hushAndVelar = {'ж', 'ш', 'ч', 'щ', 'к', 'г', 'х'};
 
   /// Все падежные формы имени, включая исходную.
   /// «Мама» -> мама, мамы, маме, маму, мамой
@@ -34,7 +41,9 @@ class RussianMorphology {
     switch (last) {
       // Мама, Анна, Никита, Саша — 1-е склонение на «а».
       case 'а':
-        final gen = _hushAndVelar.contains(beforeLast) ? '${stem}и' : '${stem}ы';
+        final gen = _hushAndVelar.contains(beforeLast)
+            ? '${stem}и'
+            : '${stem}ы';
         forms.addAll({gen, '${stem}е', '${stem}у', '${stem}ой', '${stem}ою'});
 
       // Оля, Настя, Мерьем? — 1-е склонение на «я».
@@ -47,7 +56,13 @@ class RussianMorphology {
 
       // Игорь, Любовь — мягкий знак.
       case 'ь':
-        forms.addAll({'${stem}я', '${stem}ю', '${stem}ем', '${stem}е', '${stem}и'});
+        forms.addAll({
+          '${stem}я',
+          '${stem}ю',
+          '${stem}ем',
+          '${stem}е',
+          '${stem}и',
+        });
 
       // Несклоняемые: Дмитро, Мери, Айгуль? — гласная на конце, кроме а/я.
       case 'о':
@@ -76,6 +91,9 @@ class RussianMorphology {
   String dative(String nominative) {
     final src = nominative.trim();
     if (src.length < 2) return src;
+    if (RegExp(r'[a-zäöüýňşçž]', caseSensitive: false).hasMatch(src)) {
+      return src;
+    }
 
     // Многословное имя склоняем по каждому слову: «Ахмед Брат» -> «Ахмеду Брату».
     if (src.contains(' ')) {
@@ -103,7 +121,20 @@ class RussianMorphology {
     final w = normalize(spoken);
     if (w.length < 4) return w;
 
-    const endings = ['ою', 'ой', 'ем', 'ом', 'ей', 'ю', 'я', 'у', 'е', 'ы', 'и', 'а'];
+    const endings = [
+      'ою',
+      'ой',
+      'ем',
+      'ом',
+      'ей',
+      'ю',
+      'я',
+      'у',
+      'е',
+      'ы',
+      'и',
+      'а',
+    ];
     for (final e in endings) {
       if (w.endsWith(e) && w.length - e.length >= 3) {
         return w.substring(0, w.length - e.length);
@@ -118,7 +149,7 @@ class RussianMorphology {
   static String normalize(String s) => s
       .toLowerCase()
       .replaceAll('ё', 'е')
-      .replaceAll(RegExp(r'[^\wа-яё\s-]', unicode: true), '')
+      .replaceAll(RegExp(r'[^\p{L}\p{N}\s-]', unicode: true), '')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 }
