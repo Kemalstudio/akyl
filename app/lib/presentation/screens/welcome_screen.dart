@@ -1,9 +1,12 @@
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../assistant_controller.dart';
 import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 import '../widgets/akyl_mark.dart';
+import '../widgets/animated_assistant_icon.dart';
+import '../widgets/glass_background.dart';
 
 /// Экран входа: знак, обещание и запрос разрешений.
 ///
@@ -50,100 +53,144 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final c = context.akyl;
     final theme = Theme.of(context);
 
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Spacer(flex: 3),
-              FadeSlideIn(child: AkylMark(size: 64, color: c.textPrimary)),
-              const SizedBox(height: 28),
-              FadeSlideIn(
-                delay: AkylMotion.stagger,
-                child: Text(
-                  'akyl',
-                  style: theme.textTheme.displaySmall?.copyWith(fontSize: 38),
-                ),
-              ),
-              const SizedBox(height: 12),
-              FadeSlideIn(
-                delay: AkylMotion.stagger * 2,
-                child: Text(
-                'Звонки и сообщения голосом.\nВсё считается на телефоне.',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: c.textSecondary,
-                    fontSize: 16.5,
+    return GlassBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Spacer(flex: 3),
+                FadeSlideIn(
+                  child: Container(
+                    width: 104,
+                    height: 104,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: c.surface.withValues(alpha: 0.45),
+                      border: Border.all(
+                        color: c.accent.withValues(alpha: 0.35),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(
+                            0xFF8B5CF6,
+                          ).withValues(alpha: 0.35),
+                          blurRadius: 40,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const AnimatedAssistantIcon(
+                      asset: 'voice_wave',
+                      size: 64,
+                    ),
                   ),
                 ),
-              ),
-              const Spacer(flex: 2),
-              FadeSlideIn(
-                delay: AkylMotion.stagger * 3,
-                child: const _Point(
-                  icon: Icons.cloud_off_rounded,
-                  title: 'Работает без интернета',
-                  subtitle: 'Распознавание речи идёт на устройстве',
+                const SizedBox(height: 28),
+                FadeSlideIn(
+                  delay: AkylMotion.stagger,
+                  child: Text(
+                    AkylWordmark.appName,
+                    style: theme.textTheme.displaySmall?.copyWith(fontSize: 38),
+                  ),
                 ),
-              ),
-              FadeSlideIn(
-                delay: AkylMotion.stagger * 4,
-                child: const _Point(
-                  icon: Icons.lock_outline_rounded,
-                  title: 'Голос никуда не уходит',
-                  subtitle: 'Записи и контакты не покидают телефон',
+                const SizedBox(height: 12),
+                FadeSlideIn(
+                  delay: AkylMotion.stagger * 2,
+                  child: Text(
+                    'Звонки и сообщения голосом.\nВсё считается на телефоне.',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: c.textSecondary,
+                      fontSize: 16.5,
+                    ),
+                  ),
                 ),
-              ),
-              FadeSlideIn(
-                delay: AkylMotion.stagger * 5,
-                child: const _Point(
-                  icon: Icons.bolt_outlined,
-                  title: 'Звонок за секунду',
-                  subtitle: 'От конца фразы до гудка — меньше секунды',
-                ),
-              ),
-              const Spacer(flex: 2),
-              // Отказ появляется мягко: экран не должен дёргаться в ответ
-              // на действие, которое человек уже воспринял как неудачу.
-              AnimatedSize(
-                duration: AkylMotion.base,
-                curve: AkylMotion.move,
-                alignment: Alignment.topCenter,
-                child: !_denied
-                    ? const SizedBox(width: double.infinity)
-                    : Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: Text(
-                          'Без доступа к звонкам, SMS и контактам ассистент '
-                          'не сможет выполнить ни одну команду. Разрешения '
-                          'можно выдать в настройках приложения.',
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(color: c.danger),
+                const Spacer(flex: 2),
+                FadeSlideIn(
+                  delay: AkylMotion.stagger * 3,
+                  child: Glass(
+                    radius: 24,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                      decoration: BoxDecoration(
+                        color: c.surface.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: c.border.withValues(alpha: 0.6),
                         ),
                       ),
-              ),
-              FadeSlideIn(
-                delay: AkylMotion.stagger * 6,
-                child: _PrimaryButton(
-                  label: _denied ? 'Попробовать ещё раз' : 'Разрешить и начать',
-                  busy: _requesting,
-                  onPressed: _request,
-                ),
-              ),
-              const SizedBox(height: 14),
-              FadeSlideIn(
-                delay: AkylMotion.stagger * 7,
-                child: Center(
-                  child: TextButton(
-                    onPressed: _requesting ? null : widget.onReady,
-                    style: TextButton.styleFrom(foregroundColor: c.textMuted),
-                    child: const Text('Посмотреть без разрешений'),
+                      child: const Column(
+                        children: [
+                          _Point(
+                            icon: LucideIcons.cloudOff,
+                            title: 'Работает без интернета',
+                            subtitle: 'Распознавание речи идёт на устройстве',
+                          ),
+                          _Point(
+                            icon: LucideIcons.lock,
+                            title: 'Голос никуда не уходит',
+                            subtitle: 'Записи и контакты не покидают телефон',
+                          ),
+                          _Point(
+                            icon: LucideIcons.heart,
+                            title: 'Ближе к вашим близким',
+                            subtitle:
+                                'Запоминает, кому звонить по слову «мама»',
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-            ],
+                const Spacer(flex: 2),
+                // Отказ появляется мягко: экран не должен дёргаться в ответ
+                // на действие, которое человек уже воспринял как неудачу.
+                AnimatedSize(
+                  duration: AkylMotion.base,
+                  curve: AkylMotion.move,
+                  alignment: Alignment.topCenter,
+                  child: !_denied
+                      ? const SizedBox(width: double.infinity)
+                      : Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: Text(
+                            'Без доступа к звонкам, SMS и контактам ассистент '
+                            'не сможет выполнить ни одну команду. Разрешения '
+                            'можно выдать в настройках приложения.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: c.danger,
+                            ),
+                          ),
+                        ),
+                ),
+                FadeSlideIn(
+                  delay: AkylMotion.stagger * 6,
+                  child: _PrimaryButton(
+                    label: _denied
+                        ? 'Попробовать ещё раз'
+                        : 'Разрешить и начать',
+                    busy: _requesting,
+                    onPressed: _request,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                FadeSlideIn(
+                  delay: AkylMotion.stagger * 7,
+                  child: Center(
+                    child: TextButton(
+                      onPressed: _requesting ? null : widget.onReady,
+                      style: TextButton.styleFrom(foregroundColor: c.textMuted),
+                      child: const Text('Посмотреть без разрешений'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
           ),
         ),
       ),
@@ -172,9 +219,14 @@ class _Point extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Icon(icon, size: 19, color: c.textMuted),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: c.accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, size: 17, color: c.accent),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -183,7 +235,13 @@ class _Point extends StatelessWidget {
               children: [
                 Text(title, style: theme.textTheme.labelLarge),
                 const SizedBox(height: 3),
-                Text(subtitle, style: theme.textTheme.bodyMedium),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: c.textMuted,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
               ],
             ),
           ),
@@ -206,34 +264,54 @@ class _PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.akyl;
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: FilledButton(
-        onPressed: busy ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: c.action,
-          foregroundColor: c.onAction,
-          disabledBackgroundColor: c.surfaceRaised,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AkylShape.composer),
+    return AnimatedOpacity(
+      duration: AkylMotion.quick,
+      opacity: busy ? 0.7 : 1,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AkylShape.composer),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF7C3AED), Color(0xFFC026D3)],
           ),
-          textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+              blurRadius: 30,
+              spreadRadius: -8,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: FilledButton(
+            onPressed: busy ? null : onPressed,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              disabledBackgroundColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AkylShape.composer),
+              ),
+              textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
                 fontSize: 16,
                 letterSpacing: -0.2,
               ),
+            ),
+            child: busy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                    ),
+                  )
+                : Text(label),
+          ),
         ),
-        child: busy
-            ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(c.textSecondary),
-                ),
-              )
-            : Text(label),
       ),
     );
   }
