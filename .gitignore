@@ -1,5 +1,9 @@
 # Модели: вместе больше 200 МБ, скачиваются tools/fetch_models.ps1
 models/
+# Копия моделей для сборки APK — tools/fetch_models.ps1 кладёт их сюда
+app/assets/models/
+# Нативные библиотеки sherpa-onnx — tools/copy_sherpa_libs.ps1
+app/packages/sherpa_onnx_android_arm64/android/src/main/jniLibs/
 
 # Flutter / Dart
 app/.dart_tool/
