@@ -30,18 +30,20 @@ void main() {
       expect(turn.response, 'Звоню Ахмеду, рабочий');
     });
 
-    test('С3: «Напиши Мерет что я опаздываю» — спрашивает подтверждение',
-        () async {
-      final a = await TestAssistant.build();
+    test(
+      'С3: «Напиши Мерет что я опаздываю» — спрашивает подтверждение',
+      () async {
+        final a = await TestAssistant.build();
 
-      final turn = await a.say('напиши мерет что я опаздываю');
+        final turn = await a.say('напиши мерет что я опаздываю');
 
-      expect(turn.status, SkillStatus.needsConfirmation);
-      expect(turn.response, 'Отправить Мерет: я опаздываю?');
-      expect(turn.state, DialogState.awaitingConfirmation);
-      // ТЗ, FR-7: до подтверждения ничего не уходит.
-      expect(a.phone.sentSms, isEmpty);
-    });
+        expect(turn.status, SkillStatus.needsConfirmation);
+        expect(turn.response, 'Отправить Мерет: я опаздываю?');
+        expect(turn.state, DialogState.awaitingConfirmation);
+        // ТЗ, FR-7: до подтверждения ничего не уходит.
+        expect(a.phone.sentSms, isEmpty);
+      },
+    );
 
     test('С4: «Да» — отправляет SMS', () async {
       final a = await TestAssistant.build();
@@ -163,6 +165,46 @@ void main() {
     });
   });
 
+  group('Вопросы о телефоне', () {
+    test('«скажи время»', () async {
+      final a = await TestAssistant.build();
+
+      final turn = await a.say('скажи время');
+
+      expect(turn.status, SkillStatus.done);
+      expect(turn.response, 'Сейчас 16:45');
+    });
+
+    test('«алым который час» — обращение не мешает', () async {
+      final a = await TestAssistant.build();
+
+      expect((await a.say('алым который час')).response, 'Сейчас 16:45');
+    });
+
+    test('«какое сегодня число»', () async {
+      final a = await TestAssistant.build();
+
+      final turn = await a.say('какое сегодня число');
+
+      expect(turn.response, 'Сегодня 28 сентября, понедельник');
+    });
+
+    test('«сколько заряда»', () async {
+      final a = await TestAssistant.build();
+
+      expect((await a.say('сколько заряда')).response, 'Заряд 73 процентов');
+    });
+
+    test('вопрос не требует контакта и не переспрашивает', () async {
+      final a = await TestAssistant.build();
+
+      final turn = await a.say('сколько времени');
+
+      expect(turn.state, DialogState.idle);
+      expect(a.phone.calls, isEmpty);
+    });
+  });
+
   group('Отмена (ТЗ, FR-9)', () {
     test('отменяет отложенную SMS', () async {
       final a = await TestAssistant.build();
@@ -200,18 +242,20 @@ void main() {
   });
 
   group('Безопасность SMS (ТЗ, FR-7)', () {
-    test('новая команда во время ожидания не считается подтверждением',
-        () async {
-      final a = await TestAssistant.build();
-      await a.say('напиши мерет что я опаздываю');
+    test(
+      'новая команда во время ожидания не считается подтверждением',
+      () async {
+        final a = await TestAssistant.build();
+        await a.say('напиши мерет что я опаздываю');
 
-      // «отправь» здесь — начало новой команды, а не согласие.
-      final turn = await a.say('отправь маме что буду поздно');
+        // «отправь» здесь — начало новой команды, а не согласие.
+        final turn = await a.say('отправь маме что буду поздно');
 
-      expect(turn.status, SkillStatus.needsConfirmation);
-      expect(turn.response, 'Отправить Мама: буду поздно?');
-      expect(a.phone.sentSms, isEmpty);
-    });
+        expect(turn.status, SkillStatus.needsConfirmation);
+        expect(turn.response, 'Отправить Мама: буду поздно?');
+        expect(a.phone.sentSms, isEmpty);
+      },
+    );
 
     test('без разрешения SMS не уходит', () async {
       final a = await TestAssistant.build(
