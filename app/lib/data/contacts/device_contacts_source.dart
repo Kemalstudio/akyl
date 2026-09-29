@@ -15,7 +15,9 @@ class DeviceContactsSource implements ContactsSource {
 
   @override
   Future<List<Contact>> loadAll() async {
-    final raw = await _channel.invokeListMethod<Map<Object?, Object?>>('loadAll');
+    final raw = await _channel.invokeListMethod<Map<Object?, Object?>>(
+      'loadAll',
+    );
     if (raw == null) return const [];
     return raw.map(_toContact).toList();
   }
@@ -33,10 +35,10 @@ class DeviceContactsSource implements ContactsSource {
   }
 
   static PhoneNumber _toPhone(Map<Object?, Object?> m) => PhoneNumber(
-        number: m['number'] as String? ?? '',
-        type: _phoneType(m['type'] as String?),
-        label: m['label'] as String?,
-      );
+    number: m['number'] as String? ?? '',
+    type: _phoneType(m['type'] as String?),
+    label: m['label'] as String?,
+  );
 
   /// Строки приходят из Kotlin, где ContactsContract.TYPE_* уже приведён
   /// к именам PhoneType — одно место сопоставления вместо магических чисел.
