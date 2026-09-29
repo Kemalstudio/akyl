@@ -64,18 +64,18 @@ class _FadeSlideInState extends State<FadeSlideIn>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: widget.duration);
-    _curve = CurvedAnimation(parent: _controller, curve: AkylMotion.enter);
-
-    if (widget.delay == Duration.zero) {
-      _controller.forward();
-    } else {
-      // Задержка через контроллер, а не через Future: иначе тест, закрывший
-      // экран раньше срока, получил бы «висящий» таймер.
-      Future<void>.delayed(widget.delay, () {
-        if (mounted) _controller.forward();
-      });
-    }
+    // Задержка — часть самой анимации (Interval), а не отдельный таймер:
+    // таймер пережил бы экран, закрытый раньше срока.
+    final total = widget.delay + widget.duration;
+    _controller = AnimationController(vsync: this, duration: total);
+    final start = total.inMicroseconds == 0
+        ? 0.0
+        : widget.delay.inMicroseconds / total.inMicroseconds;
+    _curve = CurvedAnimation(
+      parent: _controller,
+      curve: Interval(start, 1, curve: AkylMotion.enter),
+    );
+    _controller.forward();
   }
 
   @override
@@ -121,10 +121,8 @@ class SoftSwitcher extends StatelessWidget {
       switchInCurve: AkylMotion.enter,
       switchOutCurve: AkylMotion.exit,
       // Уходящее не должно толкать приходящее: они лежат друг на друге.
-      layoutBuilder: (current, previous) => Stack(
-        alignment: alignment,
-        children: [...previous, ?current],
-      ),
+      layoutBuilder: (current, previous) =>
+          Stack(alignment: alignment, children: [...previous, ?current]),
       transitionBuilder: (child, animation) => FadeTransition(
         opacity: animation,
         child: ScaleTransition(
@@ -135,4 +133,40 @@ class SoftSwitcher extends StatelessWidget {
       child: child,
     );
   }
+}
+
+/// Переход между экранами в стиле приложения: новый экран проявляется
+/// и чуть подрастает, старый в это время немного отступает в глубину.
+/// Стандартный сдвиг Android на стеклянном фоне выглядел бы рывком.
+class SoftPageRoute<T> extends PageRouteBuilder<T> {
+  SoftPageRoute({required WidgetBuilder builder})
+    : super(
+        transitionDuration: AkylMotion.slow,
+        reverseTransitionDuration: AkylMotion.base,
+        pageBuilder: (context, _, _) => builder(context),
+        transitionsBuilder: (context, animation, secondary, child) {
+          final enter = CurvedAnimation(
+            parent: animation,
+            curve: AkylMotion.enter,
+            reverseCurve: AkylMotion.exit,
+          );
+          final behind = CurvedAnimation(
+            parent: secondary,
+            curve: AkylMotion.move,
+          );
+          return FadeTransition(
+            opacity: enter,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1).animate(enter),
+              child: FadeTransition(
+                opacity: Tween<double>(begin: 1, end: 0.6).animate(behind),
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 1, end: 0.97).animate(behind),
+                  child: child,
+                ),
+              ),
+            ),
+          );
+        },
+      );
 }
