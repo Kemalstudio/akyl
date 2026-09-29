@@ -23,8 +23,11 @@ class StatusStrip extends StatelessWidget {
       DialogState.listening => ('Слушаю', c.accent, true),
       DialogState.processing => ('Думаю', c.textSecondary, true),
       DialogState.executing => ('Выполняю', c.textSecondary, true),
-      DialogState.awaitingConfirmation =>
-        ('Жду подтверждения — скажите «да» или «отмена»', c.accent, false),
+      DialogState.awaitingConfirmation => (
+        'Жду подтверждения — скажите «да» или «отмена»',
+        c.accent,
+        false,
+      ),
       DialogState.awaitingChoice => ('Жду выбора', c.accent, false),
       DialogState.idle => (null, c.textMuted, false),
     };
@@ -36,7 +39,12 @@ class StatusStrip extends StatelessWidget {
       child: label == null
           ? const SizedBox(width: double.infinity, height: 0)
           : Padding(
-              padding: const EdgeInsets.fromLTRB(AkylShape.gutter, 0, AkylShape.gutter, 10),
+              padding: const EdgeInsets.fromLTRB(
+                AkylShape.gutter,
+                0,
+                AkylShape.gutter,
+                10,
+              ),
               child: Row(
                 children: [
                   _Pulse(color: color, animated: animated || busy),
@@ -47,10 +55,9 @@ class StatusStrip extends StatelessWidget {
                       child: Text(
                         label,
                         key: ValueKey(label),
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelMedium
-                            ?.copyWith(color: color),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelMedium?.copyWith(color: color),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
