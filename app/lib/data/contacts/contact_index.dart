@@ -1,6 +1,8 @@
 import '../../domain/entities/contact.dart';
 import '../../domain/ports/contact_resolver.dart';
 import '../../domain/ports/contacts_source.dart';
+import '../../domain/ports/contact_alias_store.dart';
+import 'family_names.dart';
 import 'diminutives.dart';
 import 'morphology.dart';
 import 'similarity.dart';
@@ -12,8 +14,39 @@ import 'transliteration.dart';
 /// на горячем пути сначала идут три поиска по хеш-таблице — точный, падежный и
 /// фонетический. Перебор с Jaro-Winkler включается, только если они пусты.
 class ContactIndex implements ContactResolver {
-  ContactIndex(this._source, {RussianMorphology morphology = const RussianMorphology()})
-      : _morphology = morphology;
+  ContactIndex(
+    this._source, {
+    RussianMorphology morphology = const RussianMorphology(),
+    ContactAliasStore? aliasStore,
+  }) : _morphology = morphology,
+       _aliasStore = aliasStore;
+
+  final ContactAliasStore? _aliasStore;
+  Map<String, String> _relationships = {};
+  Map<String, String> get relationships => Map.unmodifiable(_relationships);
+
+  /// Назначенные близкие в порядке ролей: мама, папа, брат… Для SOS и
+  /// присмотра — им звонят и пишут первыми.
+  List<Contact> get relatives => [
+    for (final role in FamilyNames.groups.keys)
+      if (_relationships[role] case final id?)
+        ..._contacts.where((c) => c.id == id).take(1),
+  ];
+
+  Future<void> rememberRelationship(String role, String? contactId) async {
+    if (!FamilyNames.groups.containsKey(role)) throw ArgumentError.value(role);
+    if (contactId != null && !_contacts.any((c) => c.id == contactId)) {
+      throw ArgumentError.value(contactId);
+    }
+    final updated = {..._relationships};
+    if (contactId == null) {
+      updated.remove(role);
+    } else {
+      updated[role] = contactId;
+    }
+    await _aliasStore?.save(updated);
+    _relationships = updated;
+  }
 
   final ContactsSource _source;
   final RussianMorphology _morphology;
@@ -53,6 +86,7 @@ class ContactIndex implements ContactResolver {
     _aliasKeysByLength.clear();
     _phoneticKeysByLength.clear();
     _contacts = await _source.loadAll();
+    _relationships = await _aliasStore?.load() ?? {};
 
     for (final contact in _contacts) {
       final full = RussianMorphology.normalize(contact.displayName);
@@ -60,11 +94,17 @@ class ContactIndex implements ContactResolver {
 
       // Целиком: «ахмед работа» — так зовут, если в книге записано так.
       _addWithForms(full, contact, MatchKind.exact);
+      for (final alias in FamilyNames.aliasesFor(full)) {
+        _addWithForms(alias, contact, MatchKind.morphology);
+      }
 
       // По словам: «Ахмед Рахманов» отзывается и на «ахмед», и на «рахманов».
       final tokens = full.split(' ').where((t) => t.isNotEmpty);
       for (final token in tokens) {
         _addWithForms(token, contact, MatchKind.exact);
+        for (final alias in FamilyNames.aliasesFor(token)) {
+          _addWithForms(alias, contact, MatchKind.morphology);
+        }
 
         // «Мама» -> мамуля, мамочка, мам.
         for (final v in Diminutives.variantsOf(token)) {
@@ -106,10 +146,10 @@ class ContactIndex implements ContactResolver {
   }
 
   void _addPhonetic(String word, Contact contact) => _put(
-        _byPhonetic,
-        Transliteration.phoneticKey(word),
-        _Alias(contact, MatchKind.transliteration),
-      );
+    _byPhonetic,
+    Transliteration.phoneticKey(word),
+    _Alias(contact, MatchKind.transliteration),
+  );
 
   static void _put(Map<String, List<_Alias>> map, String key, _Alias alias) {
     if (key.isEmpty) return;
@@ -127,6 +167,16 @@ class ContactIndex implements ContactResolver {
   Future<List<ContactMatch>> resolve(String spokenName) async {
     final spoken = RussianMorphology.normalize(spokenName);
     if (spoken.isEmpty) return const [];
+
+    final remembered = _relationships[FamilyNames.roleOf(spoken)];
+    if (remembered != null) {
+      final contact = _contacts.where((c) => c.id == remembered).firstOrNull;
+      // A removed contact must be reassigned, never silently replaced.
+      if (contact == null) return const [];
+      return [
+        ContactMatch(contact: contact, score: 1, matchedVia: MatchKind.exact),
+      ];
+    }
 
     // id контакта -> лучшее совпадение по нему.
     final best = <String, ContactMatch>{};
@@ -147,7 +197,11 @@ class ContactIndex implements ContactResolver {
       final stem = _morphology.stripCaseEnding(spoken);
       if (stem != spoken) {
         for (final alias in _byAlias[stem] ?? const <_Alias>[]) {
-          offer(alias.contact, MatchKind.morphology.baseScore, MatchKind.morphology);
+          offer(
+            alias.contact,
+            MatchKind.morphology.baseScore,
+            MatchKind.morphology,
+          );
         }
       }
     }
@@ -156,15 +210,20 @@ class ContactIndex implements ContactResolver {
     if (best.isEmpty) {
       final key = Transliteration.phoneticKey(spoken);
       for (final alias in _byPhonetic[key] ?? const <_Alias>[]) {
-        offer(alias.contact, MatchKind.transliteration.baseScore,
-            MatchKind.transliteration);
+        offer(
+          alias.contact,
+          MatchKind.transliteration.baseScore,
+          MatchKind.transliteration,
+        );
       }
     }
 
     // 4. Последний рубеж: перебор с Jaro-Winkler. Ошибки STT в середине имени
     //    сюда и попадают («ахмеб» вместо «ахмед»).
     if (best.isEmpty) {
-      final floor = spoken.length <= _shortNameLength ? _shortFuzzyFloor : _fuzzyFloor;
+      final floor = spoken.length <= _shortNameLength
+          ? _shortFuzzyFloor
+          : _fuzzyFloor;
 
       void scan(
         Map<String, List<_Alias>> map,
@@ -179,7 +238,11 @@ class ContactIndex implements ContactResolver {
             if (score < floor) continue;
             for (final c in map[alias]!) {
               // Нечёткое совпадение не может быть увереннее точного.
-              offer(c.contact, score * MatchKind.fuzzy.baseScore, MatchKind.fuzzy);
+              offer(
+                c.contact,
+                score * MatchKind.fuzzy.baseScore,
+                MatchKind.fuzzy,
+              );
             }
           }
         }
@@ -188,7 +251,11 @@ class ContactIndex implements ContactResolver {
       scan(_byAlias, _aliasKeysByLength, spoken);
       // И по звучанию — на случай, когда STT ошибся в букве нерусского имени.
       if (best.isEmpty) {
-        scan(_byPhonetic, _phoneticKeysByLength, Transliteration.phoneticKey(spoken));
+        scan(
+          _byPhonetic,
+          _phoneticKeysByLength,
+          Transliteration.phoneticKey(spoken),
+        );
       }
     }
 
@@ -210,10 +277,10 @@ extension on MatchKind {
   /// Порог автоматического звонка — 0.85 (ТЗ, FR-6), поэтому fuzzy до него
   /// сам по себе не дотягивает и почти всегда вызывает уточнение.
   double get baseScore => switch (this) {
-        MatchKind.exact => 1.0,
-        MatchKind.morphology => 0.97,
-        MatchKind.diminutive => 0.93,
-        MatchKind.transliteration => 0.9,
-        MatchKind.fuzzy => 0.95,
-      };
+    MatchKind.exact => 1.0,
+    MatchKind.morphology => 0.97,
+    MatchKind.diminutive => 0.93,
+    MatchKind.transliteration => 0.9,
+    MatchKind.fuzzy => 0.95,
+  };
 }
