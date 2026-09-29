@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.telephony.SmsManager
+import android.telecom.TelecomManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.plugin.common.MethodCall
@@ -108,7 +109,9 @@ class PhoneBridge(private val activity: Activity) : MethodChannel.MethodCallHand
             return
         }
         try {
-            val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${Uri.encode(number)}"))
+            val intent = Intent(Intent.ACTION_CALL, Uri.fromParts("tel", number, null)).apply {
+                putExtra(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, speaker)
+            }
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             activity.startActivity(intent)
             // Динамик включается, когда звонок соединится, — не сейчас.
