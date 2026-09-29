@@ -132,7 +132,10 @@ void main() {
     }
 
     test('«да всё верно» тоже подтверждает', () async {
-      expect((await parse('да все верно', withPending())).intent, Intent.confirm);
+      expect(
+        (await parse('да все верно', withPending())).intent,
+        Intent.confirm,
+      );
     });
 
     test('новая команда подтверждением не считается', () async {
@@ -188,7 +191,7 @@ void main() {
     for (final phrase in [
       'какая сегодня погода',
       'включи музыку',
-      'привет',
+      'случайный разговор',
       '',
     ]) {
       test('«$phrase» не команда', () async {
