@@ -14,8 +14,10 @@ class NluResult {
   /// 0.0..1.0. Порог автоматического действия — 0.85 (ТЗ, FR-6).
   final double confidence;
 
-  static const NluResult unknown =
-      NluResult(intent: Intent.unknown, confidence: 0.0);
+  static const NluResult unknown = NluResult(
+    intent: Intent.unknown,
+    confidence: 0.0,
+  );
 
   String? slot(Slot s) => slots[s];
 
@@ -28,12 +30,11 @@ class NluResult {
     Intent? intent,
     Map<Slot, String>? slots,
     double? confidence,
-  }) =>
-      NluResult(
-        intent: intent ?? this.intent,
-        slots: slots ?? this.slots,
-        confidence: confidence ?? this.confidence,
-      );
+  }) => NluResult(
+    intent: intent ?? this.intent,
+    slots: slots ?? this.slots,
+    confidence: confidence ?? this.confidence,
+  );
 
   @override
   String toString() =>
