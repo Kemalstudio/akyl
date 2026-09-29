@@ -39,15 +39,20 @@ const double kAmbiguityMargin = 0.06;
 /// Единое правило выбора контакта для всех навыков (ТЗ, FR-5, FR-6).
 Future<Lookup> lookupContact(
   ContactResolver resolver,
-  String spokenName,
-) async {
+  String spokenName, {
+  String? contactId,
+}) async {
   final matches = await resolver.resolve(spokenName);
+  if (contactId != null) {
+    final match = matches.where((m) => m.contact.id == contactId).firstOrNull;
+    return match == null ? LookupNotFound(spokenName) : LookupFound(match);
+  }
   if (matches.isEmpty) return LookupNotFound(spokenName);
 
   final top = matches.first;
   final confident = top.score >= NluResult.autoExecuteThreshold;
-  final clearLeader = matches.length == 1 ||
-      (top.score - matches[1].score) > kAmbiguityMargin;
+  final clearLeader =
+      matches.length == 1 || (top.score - matches[1].score) > kAmbiguityMargin;
 
   if (confident && clearLeader) return LookupFound(top);
 
