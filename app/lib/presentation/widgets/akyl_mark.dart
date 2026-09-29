@@ -84,6 +84,9 @@ class _MarkPainter extends CustomPainter {
 class AkylWordmark extends StatelessWidget {
   const AkylWordmark({super.key, this.markSize = 22, this.fontSize = 19});
 
+  /// Название приложения — одно место на всё приложение.
+  static const String appName = 'Alym AI';
+
   final double markSize;
   final double fontSize;
 
@@ -93,19 +96,57 @@ class AkylWordmark extends StatelessWidget {
     // Стиль берётся из темы, а не задаётся здесь: иначе название выпадает
     // из общей типографики — в том числе из шрифта, подменяемого в тестах.
     final style = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.6,
-          color: c.textPrimary,
-        );
+      fontSize: fontSize,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.4,
+      color: c.textPrimary,
+    );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         AkylMark(size: markSize),
         SizedBox(width: markSize * 0.42),
-        Text('akyl', style: style),
+        // «AI» приглушено: это уточнение, а не половина имени.
+        Text.rich(
+          TextSpan(
+            children: [
+              const TextSpan(text: 'Alym'),
+              TextSpan(
+                text: ' AI',
+                style: TextStyle(color: c.textMuted),
+              ),
+            ],
+          ),
+          style: style,
+        ),
       ],
+    );
+  }
+}
+
+/// Аватар помощника в чате: белый знак в фиолетовом круге, как значок
+/// ассистента у ChatGPT и Claude.
+class AssistantAvatar extends StatelessWidget {
+  const AssistantAvatar({super.key, this.size = 28});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF7C5CFF), Color(0xFFB44CE0)],
+        ),
+      ),
+      child: AkylMark(size: size * 0.52, color: Colors.white),
     );
   }
 }
