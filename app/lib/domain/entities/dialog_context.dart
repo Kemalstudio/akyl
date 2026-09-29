@@ -4,8 +4,10 @@ import 'nlu_result.dart';
 
 /// Контекст диалога живёт 60 секунд (ТЗ, FR-8): «ему», «ей», «ещё раз», «первому».
 class DialogContext {
-  DialogContext({this.ttl = const Duration(seconds: 60), DateTime Function()? clock})
-      : _clock = clock ?? DateTime.now;
+  DialogContext({
+    this.ttl = const Duration(seconds: 60),
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
 
   final Duration ttl;
   final DateTime Function() _clock;
@@ -26,6 +28,16 @@ class DialogContext {
 
   /// Варианты, из которых пользователь выбирает (сценарий С5).
   List<ContactMatch> get choices => _alive ? _choices : const [];
+
+  NluResult? _lastCommand;
+
+  /// Последний звонок или SMS — для поправки «нет, не ему, а брату».
+  NluResult? get lastCommand => _alive ? _lastCommand : null;
+
+  void rememberCommand(NluResult command) {
+    _lastCommand = command;
+    _touch();
+  }
 
   bool get _alive {
     final t = _touchedAt;
@@ -62,6 +74,7 @@ class DialogContext {
     _lastContact = null;
     _lastPhoneType = null;
     _pendingAction = null;
+    _lastCommand = null;
     _choices = const [];
     _touchedAt = null;
   }
