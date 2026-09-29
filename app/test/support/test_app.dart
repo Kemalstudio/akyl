@@ -8,6 +8,7 @@ import 'package:akyl/domain/dialog/dialog_machine.dart';
 import 'package:akyl/presentation/assistant_controller.dart';
 import 'package:akyl/presentation/theme/akyl_theme.dart';
 import 'package:akyl/skills/call_skill.dart';
+import 'package:akyl/skills/device_skills.dart';
 import 'package:akyl/skills/sms_skill.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,9 @@ Future<AssistantController> buildTestController({
   FakePhone? phone,
   FakeTts? tts,
   FakeStt? stt,
+  FakeConversationStore? store,
+  bool wakeWord = false,
+  bool simpleMode = false,
 }) async {
   final p = phone ?? FakePhone();
   final index = ContactIndex(contacts ?? InMemoryContactsSource.demo());
@@ -31,6 +35,10 @@ Future<AssistantController> buildTestController({
     skills: [
       CallSkill(resolver: index, phone: p),
       SmsSkill(resolver: index, phone: p),
+      TimeSkill(clock: () => DateTime(2026, 9, 28, 16, 45)),
+      SmallTalkSkill(),
+      DateSkill(clock: () => DateTime(2026, 9, 28, 16, 45)),
+      BatterySkill(device: FakeDeviceInfo()),
     ],
   );
 
@@ -40,6 +48,9 @@ Future<AssistantController> buildTestController({
     tts: tts ?? FakeTts(),
     stt: stt ?? FakeStt(),
     phone: p,
+    store: store ?? FakeConversationStore(),
+    wakeWordEnabled: wakeWord,
+    simpleMode: simpleMode,
   );
   await controller.init();
   return controller;
@@ -47,25 +58,15 @@ Future<AssistantController> buildTestController({
 
 /// Оборачивает экран в тему приложения и фиксированный размер телефона.
 ///
-/// Шрифт назначается явно: в приложении он системный, а системный шрифт
-/// Android — Roboto. В тестовой среде «системного» шрифта нет, и без этой
-/// строки весь текст на снимках превращается в прямоугольники.
+/// Шрифт не подменяется: Nunito лежит в ассетах и грузится в тест как есть,
+/// поэтому снимки показывают ровно ту типографику, что и приложение.
 Widget wrapForTest(Widget child, {Brightness brightness = Brightness.dark}) {
-  final theme = brightness == Brightness.dark
-      ? AkylTheme.dark()
-      : AkylTheme.light();
-
   return MaterialApp(
     debugShowCheckedModeBanner: false,
-    theme: theme.copyWith(
-      textTheme: theme.textTheme.apply(fontFamily: kTestFontFamily),
-    ),
+    theme: brightness == Brightness.dark ? AkylTheme.dark() : AkylTheme.light(),
     home: child,
   );
 }
-
-/// Семейство, в которое загружаются настоящие шрифты для снимков.
-const String kTestFontFamily = 'Roboto';
 
 /// Типичный экран телефона среднего класса (ТЗ, раздел 3).
 const Size kPhoneSurface = Size(390, 844);
@@ -76,35 +77,40 @@ Future<void> setPhoneSurface(WidgetTester tester) async {
   addTearDown(tester.view.reset);
 }
 
-/// Есть ли шрифты Flutter SDK на этой машине. Проверка синхронная: `skip:`
-/// у теста вычисляется при сборке списка тестов, до setUpAll.
+/// Есть ли шрифт значков Flutter SDK на этой машине. Проверка синхронная:
+/// `skip:` у теста вычисляется при сборке списка тестов, до setUpAll.
 bool get materialFontsAvailable => _materialFontsDir() != null;
 
 /// Подключает настоящие шрифты вместо тестовой заглушки.
 ///
-/// Без этого golden-снимки получаются с чёрными прямоугольниками вместо букв и
-/// проверить по ним вёрстку нельзя. Шрифты берутся из кэша Flutter SDK — он
-/// есть и на машине разработчика, и на CI, поэтому файлы не тащатся в репозиторий.
+/// Без этого golden-снимки получаются с чёрными прямоугольниками вместо букв.
+/// Nunito берётся из ассетов приложения — он и так едет в APK. Шрифт значков
+/// Material в ассетах не лежит, поэтому его приходится брать из кэша Flutter
+/// SDK: он есть и на машине разработчика, и на CI.
 Future<bool> loadRealFonts() async {
+  final nunito = FontLoader(AkylTheme.fontFamily);
+  for (final weight in const [300, 400, 500, 600, 700, 800]) {
+    nunito.addFont(rootBundle.load('assets/fonts/Nunito-$weight.ttf'));
+  }
+  await nunito.load();
+
+  // Значки Lucide приезжают шрифтом из пакета, он есть в ассетах.
+  final lucide = FontLoader('packages/lucide_icons_flutter/Lucide');
+  lucide.addFont(
+    rootBundle.load('packages/lucide_icons_flutter/assets/lucide.ttf'),
+  );
+  await lucide.load();
+
   final dir = _materialFontsDir();
   if (dir == null) return false;
 
-  Future<void> load(String family, List<String> files) async {
-    final loader = FontLoader(family);
-    for (final name in files) {
-      final file = File('${dir.path}${Platform.pathSeparator}$name');
-      if (!file.existsSync()) continue;
-      loader.addFont(file.readAsBytes().then(ByteData.sublistView));
-    }
-    await loader.load();
-  }
-
-  await load(kTestFontFamily, [
-    'roboto-regular.ttf',
-    'roboto-medium.ttf',
-    'roboto-bold.ttf',
-  ]);
-  await load('MaterialIcons', ['materialicons-regular.otf']);
+  final icons = FontLoader('MaterialIcons');
+  final file = File(
+    '${dir.path}${Platform.pathSeparator}materialicons-regular.otf',
+  );
+  if (!file.existsSync()) return false;
+  icons.addFont(file.readAsBytes().then(ByteData.sublistView));
+  await icons.load();
   return true;
 }
 
