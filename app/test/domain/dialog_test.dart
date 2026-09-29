@@ -40,7 +40,9 @@ void main() {
 
     test('истёкшее подтверждение не сработает', () {
       final ctx = build()
-        ..awaitConfirmation(const NluResult(intent: Intent.sms, confidence: 0.95));
+        ..awaitConfirmation(
+          const NluResult(intent: Intent.sms, confidence: 0.95),
+        );
       now = now.add(const Duration(seconds: 61));
       expect(ctx.pendingAction, isNull);
     });
@@ -48,7 +50,11 @@ void main() {
     test('истёкшие варианты выбора исчезают', () {
       final ctx = build()
         ..offerChoices([
-          const ContactMatch(contact: mama, score: 1, matchedVia: MatchKind.exact),
+          const ContactMatch(
+            contact: mama,
+            score: 1,
+            matchedVia: MatchKind.exact,
+          ),
         ]);
       now = now.add(const Duration(seconds: 61));
       expect(ctx.choices, isEmpty);
@@ -65,7 +71,9 @@ void main() {
     test('reset очищает всё', () {
       final ctx = build()
         ..rememberContact(mama)
-        ..awaitConfirmation(const NluResult(intent: Intent.sms, confidence: 0.9))
+        ..awaitConfirmation(
+          const NluResult(intent: Intent.sms, confidence: 0.9),
+        )
         ..reset();
       expect(ctx.lastContact, isNull);
       expect(ctx.pendingAction, isNull);
@@ -75,7 +83,9 @@ void main() {
     test('clearPending не забывает собеседника', () {
       final ctx = build()
         ..rememberContact(mama)
-        ..awaitConfirmation(const NluResult(intent: Intent.sms, confidence: 0.9))
+        ..awaitConfirmation(
+          const NluResult(intent: Intent.sms, confidence: 0.9),
+        )
         ..clearPending();
       expect(ctx.pendingAction, isNull);
       expect(ctx.lastContact, mama); // «позвони ему ещё раз» должно работать
@@ -92,7 +102,10 @@ void main() {
 
     test('путь с уточнением', () {
       expect(DialogState.executing.canGoTo(DialogState.awaitingChoice), isTrue);
-      expect(DialogState.awaitingChoice.canGoTo(DialogState.processing), isTrue);
+      expect(
+        DialogState.awaitingChoice.canGoTo(DialogState.processing),
+        isTrue,
+      );
     });
 
     test('недопустимые переходы закрыты', () {
@@ -110,13 +123,17 @@ void main() {
 
   group('Порог уверенности (ТЗ, FR-6)', () {
     test('0.85 и выше — действуем', () {
-      expect(const NluResult(intent: Intent.call, confidence: 0.85).isConfident,
-          isTrue);
+      expect(
+        const NluResult(intent: Intent.call, confidence: 0.85).isConfident,
+        isTrue,
+      );
     });
 
     test('ниже 0.85 — уточняем', () {
-      expect(const NluResult(intent: Intent.call, confidence: 0.84).isConfident,
-          isFalse);
+      expect(
+        const NluResult(intent: Intent.call, confidence: 0.84).isConfident,
+        isFalse,
+      );
     });
   });
 }
