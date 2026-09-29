@@ -3,6 +3,9 @@ import '../../domain/entities/intent.dart';
 import '../../domain/entities/nlu_result.dart';
 import '../../domain/ports/nlu.dart';
 import '../contacts/morphology.dart';
+import 'device_commands.dart';
+import 'life_commands.dart';
+import 'turkmen_commands.dart';
 
 /// NLU на правилах — этап 1 (ТЗ, раздел 5).
 ///
@@ -21,27 +24,74 @@ class RuleBasedNlu implements Nlu {
   // --- Словари ---------------------------------------------------------------
 
   static const List<String> _callVerbs = [
-    'позвони', 'позвонить', 'звони', 'звонить', 'позвоните',
-    'набери', 'набрать', 'наберите',
-    'вызови', 'вызвать', 'соедини', 'соедини меня',
+    'позвони',
+    'позвонить',
+    'звони',
+    'звонить',
+    'позвоните',
+    'набери',
+    'набрать',
+    'наберите',
+    'вызови',
+    'вызвать',
+    'соедини',
+    'соедини меня',
   ];
 
   static const List<String> _smsVerbs = [
-    'напиши', 'написать', 'напишите',
-    'отправь', 'отправить', 'отправьте',
-    'сообщи', 'сообщить', 'передай', 'передать',
-    'скажи', 'смс', 'сообщение',
+    'напиши',
+    'написать',
+    'напишите',
+    'отправь',
+    'отправить',
+    'отправьте',
+    'сообщи',
+    'сообщить',
+    'передай',
+    'передать',
+    'скажи',
+    'смс',
+    'сообщение',
   ];
 
   static const List<String> _confirmWords = [
-    'да', 'ага', 'угу', 'давай', 'давайте', 'конечно', 'верно', 'точно',
-    'подтверждаю', 'подтвердить', 'ок', 'окей', 'окей', 'хорошо', 'ладно',
-    'отправь', 'отправляй', 'отправить', 'шли', 'посылай', 'все верно',
+    'да',
+    'ага',
+    'угу',
+    'давай',
+    'давайте',
+    'конечно',
+    'верно',
+    'точно',
+    'подтверждаю',
+    'подтвердить',
+    'ок',
+    'окей',
+    'окей',
+    'хорошо',
+    'ладно',
+    'отправь',
+    'отправляй',
+    'отправить',
+    'шли',
+    'посылай',
+    'все верно',
   ];
 
   static const List<String> _cancelWords = [
-    'отмена', 'отмени', 'отменить', 'стоп', 'стой', 'нет', 'не надо',
-    'не нужно', 'отставить', 'забудь', 'забей', 'хватит', 'прекрати',
+    'отмена',
+    'отмени',
+    'отменить',
+    'стоп',
+    'стой',
+    'нет',
+    'не надо',
+    'не нужно',
+    'отставить',
+    'забудь',
+    'забей',
+    'хватит',
+    'прекрати',
   ];
 
   /// Тип номера: как его называют вслух -> что означает.
@@ -74,6 +124,9 @@ class RuleBasedNlu implements Nlu {
   /// Фразы длиннее одного слова, поэтому ищутся во всей строке, а не по словам.
   static const List<String> _speakerPhrases = [
     'по громкой связи',
+    'на громкой связи',
+    'громкой связи',
+    'с громкой связью',
     'на громкую связь',
     'через громкую связь',
     'по громкой',
@@ -86,40 +139,130 @@ class RuleBasedNlu implements Nlu {
 
   /// Местоимения, которые берут контакт из контекста (ТЗ, FR-8, сценарий С7).
   static const Set<String> _pronouns = {
-    'ему', 'ей', 'его', 'ее', 'им', 'ей же', 'туда', 'обратно',
+    'ему',
+    'ей',
+    'его',
+    'ее',
+    'им',
+    'ей же',
+    'туда',
+    'обратно',
+    'этому человеку',
+    'этому контакту',
+    'этому человеку вот',
+    'этому',
+    'ему же',
+    'этому абоненту',
   };
 
   static const Set<String> _againMarkers = {
-    'еще', 'ещё', 'снова', 'опять', 'повтори', 'перезвони',
+    'еще',
+    'ещё',
+    'снова',
+    'опять',
+    'повтори',
+    'перезвони',
+  };
+
+  /// Команды-вопросы: фраза целиком, без слотов. Ключ — что должно
+  /// встретиться в сказанном, значение — намерение.
+  ///
+  /// Сопоставление идёт по вхождению, а не по началу строки: «алым скажи
+  /// который час» и «а который сейчас час» должны сработать одинаково.
+  static const Map<String, Intent> _questionPhrases = {
+    'который час': Intent.time,
+    'сколько времени': Intent.time,
+    'скажи время': Intent.time,
+    'сколько сейчас времени': Intent.time,
+    'текущее время': Intent.time,
+    'время сейчас': Intent.time,
+    'какое сегодня число': Intent.date,
+    'какое число': Intent.date,
+    'какой сегодня день': Intent.date,
+    'какая сегодня дата': Intent.date,
+    'скажи дату': Intent.date,
+    'сегодняшняя дата': Intent.date,
+    'сколько заряда': Intent.battery,
+    'заряд батареи': Intent.battery,
+    'сколько процентов': Intent.battery,
+    'заряд телефона': Intent.battery,
+    'сколько батареи': Intent.battery,
   };
 
   /// Слова, которые отделяют текст сообщения от имени.
   static const List<String> _messageSeparators = [
-    ' что ', ' чтобы ', ' о том что ', ' типа ',
+    ' что ',
+    ' чтобы ',
+    ' о том что ',
+    ' типа ',
   ];
 
   /// Служебные слова, которые выкидываются перед разбором имени.
   static const Set<String> _stopWords = {
-    'мне', 'пожалуйста', 'быстро', 'срочно', 'сейчас', 'на', 'по', 'номер',
-    'номеру', 'контакт', 'контакту', 'акыл', 'эй', 'раз', 'разик',
+    'мне',
+    'пожалуйста',
+    'быстро',
+    'срочно',
+    'сейчас',
+    'на',
+    'по',
+    'номер',
+    'номеру',
+    'контакт',
+    'контакту',
+    'акыл',
+    'эй',
+    'раз',
+    'разик',
   };
 
   /// Слова, которые сами по себе ничего не значат, но встречаются в ответах:
   /// «да всё верно», «ага давай».
   static const Set<String> _confirmFillers = {
-    'все', 'это', 'так', 'точно', 'именно', 'ну',
+    'все',
+    'это',
+    'так',
+    'точно',
+    'именно',
+    'ну',
   };
 
   // --- Разбор ----------------------------------------------------------------
 
   @override
   Future<NluResult> parse(String text, DialogContext ctx) async {
-    final t = RussianMorphology.normalize(text);
+    var command = text
+        .trim()
+        .replaceFirst(
+          RegExp(
+            r'^(?:(?:эй|привет)\s+)?(?:макс|maks|max|акыл|алым)[\s,:!—-]+',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .replaceFirst(RegExp(r'^пожалуйста[\s,]+', caseSensitive: false), '');
+    // «Ejeme jaň et» -> «позвони ejem»: дальше разбор общий.
+    command = TurkmenCommands.toRussian(command) ?? command;
+    final t = RussianMorphology.normalize(command);
     if (t.isEmpty) return NluResult.unknown;
+
+    // «Помогите» — раньше всего. «Забудь про ключи» и «отмени напоминание»
+    // начинаются со слов отмены, но отменой не являются.
+    final urgent = LifeCommands.parseBeforeCancel(command);
+    if (urgent != null) return urgent;
+
+    // «Нет, не ему, а брату» начинается с «нет», но это не отмена, а поправка.
+    final correction = _tryCorrection(t, ctx);
+    if (correction != null) return correction;
 
     // Отмена работает в любом состоянии (ТЗ, FR-9).
     final cancel = _tryCancel(t);
     if (cancel != null) return cancel;
+
+    // «Повтори» — даже посреди вопроса «какому Ахмеду?».
+    if (_repeatPhrases.contains(t)) {
+      return const NluResult(intent: Intent.repeat, confidence: 0.97);
+    }
 
     // Ответ на «какому Ахмеду?» важнее, чем попытка увидеть тут новую команду.
     if (ctx.choices.isNotEmpty) {
@@ -133,7 +276,67 @@ class RuleBasedNlu implements Nlu {
       if (confirm != null) return confirm;
     }
 
-    return _tryCall(t, ctx) ?? _trySms(t, ctx) ?? NluResult.unknown;
+    return _tryCall(t, ctx) ??
+        DeviceCommands.parse(command) ??
+        LifeCommands.parse(command) ??
+        _trySms(command, ctx) ??
+        _tryQuestion(t) ??
+        _trySmallTalk(t) ??
+        NluResult.unknown;
+  }
+
+  static const Set<String> _repeatPhrases = {
+    'повтори',
+    'повтори еще раз',
+    'повтори пожалуйста',
+    'еще раз повтори',
+    'скажи еще раз',
+    'что ты сказал',
+    'что ты сказала',
+    'что ты говоришь',
+    'не расслышал',
+    'не расслышала',
+    'не понял повтори',
+    'что',
+  };
+
+  /// Поправка адресата: «нет, не ему, а Ахмеду брату», «я сказал папе»,
+  /// «нет, маме». Имеет смысл, только если есть что поправлять.
+  NluResult? _tryCorrection(String t, DialogContext ctx) {
+    if (ctx.lastCommand == null &&
+        ctx.pendingAction == null &&
+        ctx.choices.isEmpty) {
+      return null;
+    }
+    final match =
+        RegExp(r'^(?:нет\s+)?не\s+\S+(?:\s\S+)?\s+а\s+(.+)$').firstMatch(t) ??
+        RegExp(
+          r'^(?:нет\s+)?я\s+(?:же\s+)?(?:сказал|сказала|имел в виду|имела в виду|просил|просила)\s+(.+)$',
+        ).firstMatch(t) ??
+        RegExp(r'^нет\s+(.+)$').firstMatch(t);
+    if (match == null) return null;
+
+    final name = _cleanContact(match[1]!.replaceFirst(RegExp(r'^а\s+'), ''));
+    // «нет, не надо», «нет, спасибо» — это отказ, а не новое имя.
+    if (name.isEmpty ||
+        name.startsWith('не ') ||
+        name.split(' ').length > 3 ||
+        _tryCancel(name) != null ||
+        _confirmWords.contains(name) ||
+        const {
+          'спасибо',
+          'не надо',
+          'не нужно',
+          'все',
+          'никому',
+        }.contains(name)) {
+      return null;
+    }
+    return NluResult(
+      intent: Intent.correct,
+      slots: {Slot.contact: name},
+      confidence: 0.9,
+    );
   }
 
   NluResult? _tryCancel(String t) {
@@ -153,13 +356,70 @@ class RuleBasedNlu implements Nlu {
       return const NluResult(intent: Intent.confirm, confidence: 0.98);
     }
     final words = t.split(' ').where((w) => w.isNotEmpty);
-    final allAgreement = words.isNotEmpty &&
-        words.every((w) => _confirmWords.contains(w) || _confirmFillers.contains(w));
+    final allAgreement =
+        words.isNotEmpty &&
+        words.every(
+          (w) => _confirmWords.contains(w) || _confirmFillers.contains(w),
+        );
     if (!allAgreement) return null;
     return const NluResult(intent: Intent.confirm, confidence: 0.98);
   }
 
+  /// Вопрос о телефоне или времени: слотов нет, важна только сама фраза.
+  NluResult? _tryQuestion(String t) {
+    t = t
+        .replaceFirst(
+          RegExp(r'^(?:как дела|привет|добрый день)\s+(?:и\s+)?'),
+          '',
+        )
+        .replaceFirst(RegExp(r'\s+пожалуйста$'), '');
+    // Длинные варианты раньше коротких: «какое сегодня число» важнее,
+    // чем «какое число», хотя подходят оба.
+    final phrases = _questionPhrases.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    for (final phrase in phrases) {
+      if (t != phrase && t != 'скажи $phrase' && t != 'а $phrase') continue;
+      return NluResult(intent: _questionPhrases[phrase]!, confidence: 0.97);
+    }
+    return null;
+  }
+
+  NluResult? _trySmallTalk(String t) {
+    // «Привет, как дела?» — приветствие и вопрос вместе, так говорят чаще,
+    // чем по отдельности.
+    final rest = t
+        .replaceFirst(
+          RegExp(
+            r'^(?:привет|приветик|здравствуй|здравствуйте|добрый день|добрый вечер|доброе утро|салам|салют)(?:\s+|$)',
+          ),
+          '',
+        )
+        .replaceFirst(RegExp(r'\s+(?:макс|друг)$'), '')
+        .trim();
+    const questions = {
+      'как дела',
+      'как ты',
+      'как у тебя дела',
+      'как поживаешь',
+      'как жизнь',
+      'как сам',
+    };
+    final greeted = rest != t;
+    final smallTalk =
+        (greeted && (rest.isEmpty || questions.contains(rest))) ||
+        questions.contains(t) ||
+        const {'спасибо', 'благодарю', 'спасибо большое'}.contains(t);
+    if (!smallTalk) return null;
+    return NluResult(
+      intent: Intent.smallTalk,
+      slots: {Slot.topic: t},
+      confidence: .99,
+    );
+  }
+
   NluResult? _trySelect(String t) {
+    if (_tryQuestion(t) != null || _trySmallTalk(t) != null) return null;
     // Порядковое числительное: «первому», «второй», «третьего».
     if (_ordinalIndex(t) != null || !_startsWithCommandVerb(t)) {
       return NluResult(
@@ -189,6 +449,7 @@ class RuleBasedNlu implements Nlu {
         intent: Intent.call,
         slots: {
           Slot.contact: last.displayName,
+          Slot.contactId: last.id,
           if (phoneType != null) Slot.phoneType: phoneType.name,
           if (speaker) Slot.speaker: 'true',
         },
@@ -213,28 +474,38 @@ class RuleBasedNlu implements Nlu {
   }
 
   NluResult? _trySms(String t, DialogContext ctx) {
-    final rest = _stripVerb(t, _smsVerbs);
+    if (_tryQuestion(RussianMorphology.normalize(t)) != null) return null;
+    // Keep the dictated body intact: punctuation, case and ё are user content.
+    t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final lower = t.toLowerCase();
+    final stripped = _stripVerb(lower, _smsVerbs);
+    final rest = stripped == null
+        ? null
+        : t.substring(t.length - stripped.length);
     if (rest == null) return null;
 
     // «отправь смс маме что ...» — слово «смс» тут служебное.
     var body = rest;
-    for (final filler in ['смс', 'сообщение', 'сообщение для', 'смску']) {
-      if (body == filler) return null; // просто «отправь смс» — имени нет
-      if (body.startsWith('$filler ')) {
-        body = body.substring(filler.length + 1);
-      }
-    }
+    body = body.replaceFirst(
+      RegExp(r'^(?:сообщение|смс|смску)(?:\s+для)?\s+', caseSensitive: false),
+      '',
+    );
 
     String namePart;
     String message;
 
-    final sepIndex = _findSeparator(body);
+    final sepIndex = _findSeparator(body.toLowerCase());
     if (sepIndex != null) {
       namePart = body.substring(0, sepIndex.$1).trim();
       message = body.substring(sepIndex.$1 + sepIndex.$2).trim();
     } else {
       // Без «что»: первое слово — имя, остальное — текст.
-      final space = body.indexOf(' ');
+      final references = _pronouns.toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
+      final reference = references
+          .where((p) => body.toLowerCase().startsWith('$p '))
+          .firstOrNull;
+      final space = reference?.length ?? body.indexOf(' ');
       if (space < 0) return null; // одно слово: имя есть, текста нет
       namePart = body.substring(0, space).trim();
       message = body.substring(space + 1).trim();
@@ -242,7 +513,7 @@ class RuleBasedNlu implements Nlu {
 
     if (message.isEmpty) return null;
 
-    final contact = _cleanContact(namePart);
+    final contact = _cleanContact(RussianMorphology.normalize(namePart));
     if (_isContextReference(contact, t)) {
       final last = ctx.lastContact;
       if (last == null) {
@@ -254,7 +525,11 @@ class RuleBasedNlu implements Nlu {
       }
       return NluResult(
         intent: Intent.sms,
-        slots: {Slot.contact: last.displayName, Slot.message: message},
+        slots: {
+          Slot.contact: last.displayName,
+          Slot.contactId: last.id,
+          Slot.message: message,
+        },
         confidence: 0.95,
       );
     }
@@ -288,11 +563,28 @@ class RuleBasedNlu implements Nlu {
 
   /// Находит «что»/«чтобы» и возвращает (позиция, длина разделителя).
   (int, int)? _findSeparator(String body) {
-    for (final sep in _messageSeparators) {
+    // The earliest boundary wins. Prefer the longest marker at that position;
+    // «сообщение ... что ...» must not discard the beginning of the message.
+    final separators = [
+      ..._messageSeparators,
+      ' вот это сообщение ',
+      ' это сообщение ',
+      ' вот такое сообщение ',
+      ' такое сообщение ',
+      ' сообщение ',
+      ' смс ',
+      ' с текстом ',
+      ' текст сообщения ',
+      ' сообщение: ',
+      ' смс: ',
+      ': ',
+    ]..sort((a, b) => b.length.compareTo(a.length));
+    (int, int)? found;
+    for (final sep in separators) {
       final i = body.indexOf(sep);
-      if (i > 0) return (i, sep.length);
+      if (i > 0 && (found == null || i < found.$1)) found = (i, sep.length);
     }
-    return null;
+    return found;
   }
 
   /// Вынимает просьбу о громкой связи и возвращает фразу без неё.
@@ -316,7 +608,8 @@ class RuleBasedNlu implements Nlu {
       if (type == null) continue;
 
       // «телефон» без «на» перед ним — часть имени контакта, а не тип.
-      final hasPreposition = i > 0 && (words[i - 1] == 'на' || words[i - 1] == 'по');
+      final hasPreposition =
+          i > 0 && (words[i - 1] == 'на' || words[i - 1] == 'по');
       if (words[i] == 'телефон' && !hasPreposition) continue;
 
       final rest = [...words]..removeAt(i);
@@ -331,7 +624,12 @@ class RuleBasedNlu implements Nlu {
   /// Выкидывает служебные слова, оставляя только имя.
   String _cleanContact(String s) => s
       .split(' ')
-      .where((w) => w.isNotEmpty && !_stopWords.contains(w) && !_againMarkers.contains(w))
+      .where(
+        (w) =>
+            w.isNotEmpty &&
+            !_stopWords.contains(w) &&
+            !_againMarkers.contains(w),
+      )
       .join(' ')
       .trim();
 
