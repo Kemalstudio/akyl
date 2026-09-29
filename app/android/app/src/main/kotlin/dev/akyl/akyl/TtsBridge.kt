@@ -4,6 +4,9 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
+import android.speech.tts.UtteranceProgressListener
+import android.os.Handler
+import android.os.Looper
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.Locale
@@ -34,6 +37,18 @@ class TtsBridge(private val context: Context) : MethodChannel.MethodCallHandler 
 
     private var tts: TextToSpeech? = null
     private var ready = false
+    private var initialized = false
+    private val handler = Handler(Looper.getMainLooper())
+    private var pendingSpeech: MethodChannel.Result? = null
+    private var utterance = 0
+    private val timeout = Runnable { completeSpeech("Озвучка не завершилась вовремя") }
+
+    private fun completeSpeech(error: String? = null) {
+        handler.removeCallbacks(timeout)
+        val pending = pendingSpeech
+        pendingSpeech = null
+        if (error == null) pending?.success(null) else pending?.error("TTS", error, null)
+    }
 
     /** Фраза, произнесённая до того, как движок успел инициализироваться. */
     private var queued: String? = null
@@ -56,14 +71,18 @@ class TtsBridge(private val context: Context) : MethodChannel.MethodCallHandler 
                 if (text.isNullOrEmpty()) {
                     result.success(null)
                 } else {
+                    completeSpeech()
+                    utterance++
+                    pendingSpeech = result
+                    handler.postDelayed(timeout, 20000)
                     speak(text)
-                    result.success(null)
                 }
             }
 
             "stop" -> {
                 tts?.stop()
                 queued = null
+                completeSpeech()
                 result.success(null)
             }
 
@@ -80,10 +99,24 @@ class TtsBridge(private val context: Context) : MethodChannel.MethodCallHandler 
             if (it.size >= 2) Locale(it[0], it[1]) else Locale(it[0])
         }
         tts = TextToSpeech(context) { status ->
+            initialized = true
             ready = status == TextToSpeech.SUCCESS
-            if (!ready) return@TextToSpeech
+            if (!ready) {
+                completeSpeech("Голосовой движок недоступен")
+                return@TextToSpeech
+            }
 
             tts?.apply {
+                setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(id: String?) {}
+                    override fun onDone(id: String?) { handler.post {
+                        if (id == "$UTTERANCE_ID-$utterance") completeSpeech()
+                    } }
+                    @Deprecated("Android callback")
+                    override fun onError(id: String?) { handler.post {
+                        if (id == "$UTTERANCE_ID-$utterance") completeSpeech("Не удалось произнести ответ")
+                    } }
+                })
                 language = locale
                 setSpeechRate(rate)
                 setPitch(pitch)
@@ -95,10 +128,14 @@ class TtsBridge(private val context: Context) : MethodChannel.MethodCallHandler 
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
                 )
-                bestVoiceFor(this, locale)?.let { voice = it }
+                val offlineVoice = bestVoiceFor(this, locale)
+                if (offlineVoice == null) {
+                    ready = false
+                    completeSpeech("Установите русский офлайн-голос в настройках Android")
+                } else voice = offlineVoice
             }
 
-            queued?.let { speak(it) }
+            if (ready) queued?.let { speak(it) }
             queued = null
         }
     }
@@ -126,18 +163,26 @@ class TtsBridge(private val context: Context) : MethodChannel.MethodCallHandler 
 
     private fun speak(text: String) {
         val engine = tts
+        if (initialized && !ready) {
+            completeSpeech("Русский офлайн-голос недоступен")
+            return
+        }
         if (engine == null || !ready) {
             // Первая команда может прийти раньше готовности движка — не теряем её.
             queued = text
             return
         }
-        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
+        if (engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "$UTTERANCE_ID-$utterance") == TextToSpeech.ERROR) {
+            completeSpeech("Не удалось произнести ответ")
+        }
     }
 
     fun dispose() {
+        completeSpeech()
         tts?.stop()
         tts?.shutdown()
         tts = null
         ready = false
+        initialized = false
     }
 }
