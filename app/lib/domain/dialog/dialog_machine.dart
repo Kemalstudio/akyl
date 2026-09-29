@@ -15,9 +15,11 @@ class DialogTurn {
     required this.state,
     required this.status,
     this.nlu,
+    this.alreadySpoken = false,
   });
 
   final String recognizedText;
+  final bool alreadySpoken;
 
   /// Текст для TTS и для чата на экране (ТЗ, FR-10, FR-11).
   final String response;
@@ -43,10 +45,10 @@ class DialogMachine {
     required ChoiceResolver choiceResolver,
     required List<Skill> skills,
     DialogContext? context,
-  })  : _nlu = nlu,
-        _choiceResolver = choiceResolver,
-        _skills = {for (final s in skills) s.intent: s},
-        context = context ?? DialogContext();
+  }) : _nlu = nlu,
+       _choiceResolver = choiceResolver,
+       _skills = {for (final s in skills) s.intent: s},
+       context = context ?? DialogContext();
 
   final Nlu _nlu;
   final ChoiceResolver _choiceResolver;
@@ -68,6 +70,14 @@ class DialogMachine {
 
   /// Микрофон закрылся, а фразы не было: вернуться в покой, не поднимая
   /// разговор. Без этого автомат завис бы в listening до следующей команды.
+  /// Смена разговора: забыть контекст и вернуться в покой.
+  /// «Позвони ему ещё раз» не должно тянуться из прошлого разговора.
+  void reset() {
+    context.reset();
+    _choiceOrigin = null;
+    _state = DialogState.idle;
+  }
+
   void abortListening() {
     if (_state != DialogState.listening) return;
     _transition(DialogState.idle);
@@ -78,16 +88,91 @@ class DialogMachine {
     _transition(DialogState.processing);
 
     final result = await _nlu.parse(recognizedText, context);
+    // Новая самостоятельная команда отменяет незаконченный вопрос.
+    // «Повтори» и поправка, наоборот, к нему относятся.
+    if (!const {
+      Intent.cancel,
+      Intent.select,
+      Intent.confirm,
+      Intent.unknown,
+      Intent.repeat,
+      Intent.correct,
+    }.contains(result.intent)) {
+      context.clearPending();
+      _choiceOrigin = null;
+    }
 
     final turn = switch (result.intent) {
       Intent.cancel => _cancel(recognizedText, result),
       Intent.select => await _select(recognizedText, result),
       Intent.confirm => await _confirm(recognizedText, result),
       Intent.unknown => _unknown(recognizedText, result),
-      Intent.call || Intent.sms => await _dispatch(recognizedText, result),
+      Intent.repeat => _repeat(recognizedText, result),
+      Intent.correct => await _correct(recognizedText, result),
+      Intent.call ||
+      Intent.sms ||
+      Intent.time ||
+      Intent.date ||
+      Intent.battery ||
+      Intent.smallTalk ||
+      Intent.alarm ||
+      Intent.timer ||
+      Intent.flashlight ||
+      Intent.volume ||
+      Intent.readSms ||
+      Intent.recentCalls ||
+      Intent.openApp ||
+      Intent.remember ||
+      Intent.recall ||
+      Intent.forget ||
+      Intent.lastCall ||
+      Intent.remind ||
+      Intent.listReminders ||
+      Intent.cancelReminder ||
+      Intent.sos => await _dispatch(recognizedText, result),
     };
 
+    if (result.intent != Intent.repeat) _lastResponse = turn.response;
     return turn;
+  }
+
+  /// Последний ответ — для «повтори».
+  String? _lastResponse;
+
+  /// «Повтори»: сказать последний ответ ещё раз, не трогая вопрос,
+  /// на который человек ещё не ответил.
+  DialogTurn _repeat(String text, NluResult result) {
+    final (next, status) = context.pendingAction != null
+        ? (DialogState.awaitingConfirmation, SkillStatus.needsConfirmation)
+        : context.choices.isNotEmpty && _choiceOrigin != null
+        ? (DialogState.awaitingChoice, SkillStatus.needsChoice)
+        : (DialogState.idle, SkillStatus.done);
+    _transition(next);
+    return DialogTurn(
+      recognizedText: text,
+      response: _lastResponse ?? 'Я ещё ничего не говорил',
+      state: _state,
+      status: status,
+      nlu: result,
+    );
+  }
+
+  /// «Нет, не ему, а Ахмеду брату»: та же команда, другой адресат.
+  /// SMS после поправки снова ждёт подтверждения — уйти не тому она не может.
+  Future<DialogTurn> _correct(String text, NluResult result) async {
+    final base = context.pendingAction ?? _choiceOrigin ?? context.lastCommand;
+    final name = result.slot(Slot.contact);
+    if (base == null || name == null) return _unknown(text, result);
+
+    final slots = {...base.slots}..remove(Slot.contactId);
+    slots[Slot.contact] = name;
+    context.clearPending();
+    _choiceOrigin = null;
+    return _dispatch(
+      text,
+      base.copyWith(slots: slots, confidence: 0.95),
+      nluForLog: result,
+    );
   }
 
   /// «отмена», «стоп» — в любом состоянии (ТЗ, FR-9).
@@ -124,7 +209,10 @@ class DialogMachine {
       return _unknown(text, result);
     }
 
-    final chosen = _choiceResolver.resolve(result.slot(Slot.choice) ?? text, choices);
+    final chosen = _choiceResolver.resolve(
+      result.slot(Slot.choice) ?? text,
+      choices,
+    );
     if (chosen == null) {
       // Вопрос остаётся в силе — переспрашиваем, а не сбрасываем диалог.
       _transition(DialogState.awaitingChoice);
@@ -139,7 +227,11 @@ class DialogMachine {
 
     // Имя варианта уникально в индексе, поэтому повторный поиск однозначен.
     final resolved = origin.copyWith(
-      slots: {...origin.slots, Slot.contact: chosen.contact.displayName},
+      slots: {
+        ...origin.slots,
+        Slot.contact: chosen.contact.displayName,
+        Slot.contactId: chosen.contact.id,
+      },
     );
     context.clearPending();
     _choiceOrigin = null;
@@ -168,12 +260,21 @@ class DialogMachine {
     final skill = _skills[result.intent];
     if (skill == null) return _unknown(text, result);
 
+    // Команды без адресата — «который час» — отвечают сразу: уточнять
+    // там нечего.
+    final needsContact =
+        result.intent == Intent.call || result.intent == Intent.sms;
+
     // Уверенности не хватает даже на попытку — лучше переспросить (ТЗ, FR-6).
-    if (!result.isConfident && result.slots[Slot.contact] == null) {
+    if (needsContact &&
+        !result.isConfident &&
+        result.slots[Slot.contact] == null) {
       _transition(DialogState.idle);
       return DialogTurn(
         recognizedText: text,
-        response: result.intent == Intent.call ? 'Кому позвонить?' : 'Кому написать?',
+        response: result.intent == Intent.call
+            ? 'Кому позвонить?'
+            : 'Кому написать?',
         state: _state,
         status: SkillStatus.failed,
         nlu: nluForLog ?? result,
@@ -183,6 +284,13 @@ class DialogMachine {
     _transition(DialogState.executing);
     final outcome = await skill.execute(result, context);
 
+    // Звонок и SMS можно поправить: «нет, не ему, а брату».
+    if (needsContact &&
+        (outcome.status == SkillStatus.done ||
+            outcome.status == SkillStatus.needsConfirmation)) {
+      context.rememberCommand(result);
+    }
+
     switch (outcome.status) {
       case SkillStatus.done:
         final contact = outcome.contact;
@@ -191,7 +299,18 @@ class DialogMachine {
 
       case SkillStatus.needsConfirmation:
         // Откладываем ровно тот объект, который потом узнает навык.
-        context.awaitConfirmation(result);
+        final contact = outcome.contact;
+        final pending = contact == null
+            ? result
+            : result.copyWith(
+                slots: {
+                  ...result.slots,
+                  Slot.contact: contact.displayName,
+                  Slot.contactId: contact.id,
+                },
+              );
+        context.awaitConfirmation(pending);
+        if (contact != null) context.rememberContact(contact);
         _transition(DialogState.awaitingConfirmation);
 
       case SkillStatus.needsChoice:
@@ -206,6 +325,7 @@ class DialogMachine {
     return DialogTurn(
       recognizedText: text,
       response: outcome.spokenResponse,
+      alreadySpoken: outcome.alreadySpoken,
       state: _state,
       status: outcome.status,
       nlu: nluForLog ?? result,
