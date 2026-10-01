@@ -7,7 +7,6 @@ import '../../domain/entities/skill_result.dart';
 import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 import 'akyl_mark.dart';
-import 'cosmic.dart';
 import 'typewriter_text.dart';
 
 /// Реплика в истории (ТЗ, FR-10), в духе ChatGPT.
@@ -21,15 +20,27 @@ class MessageTile extends StatelessWidget {
     required this.message,
     this.onSpeak,
     this.onTyping,
+    this.onConfirm,
+    this.onReject,
+    this.showActions = true,
   });
 
   final ChatMessage message;
+
+  /// «Копировать» и «Озвучить» — у последнего ответа, чтобы история не
+  /// рябила одинаковыми значками.
+  final bool showActions;
 
   /// «Озвучить ещё раз» под ответом.
   final ValueChanged<String>? onSpeak;
 
   /// Ответ растёт при печати — список прокручивается за ним.
   final VoidCallback? onTyping;
+
+  /// Ответ на вопрос «отправить?» касанием — только у последней реплики,
+  /// пока помощник ждёт ответа.
+  final VoidCallback? onConfirm;
+  final VoidCallback? onReject;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +56,14 @@ class MessageTile extends StatelessWidget {
         fromRight: message.fromUser,
         child: message.fromUser
             ? _UserBubble(message)
-            : _AssistantReply(message, onSpeak: onSpeak, onTyping: onTyping),
+            : _AssistantReply(
+                message,
+                onSpeak: onSpeak,
+                onTyping: onTyping,
+                onConfirm: onConfirm,
+                onReject: onReject,
+                showActions: showActions,
+              ),
       ),
     );
   }
@@ -69,13 +87,10 @@ class _UserBubble extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
+            gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                const Color(0xFF8B5CF6).withValues(alpha: 0.92),
-                const Color(0xFF5B5BF0).withValues(alpha: 0.92),
-              ],
+              colors: [Color(0xFF7457E8), Color(0xFF6348DA)],
             ),
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(22),
@@ -83,18 +98,10 @@ class _UserBubble extends StatelessWidget {
               bottomLeft: Radius.circular(22),
               bottomRight: Radius.circular(6),
             ),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.4),
-                blurRadius: 18,
-                spreadRadius: -4,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
           ),
           child: Text(
-            message.text,
+            _sentence(message.text),
             style: Theme.of(
               context,
             ).textTheme.bodyLarge?.copyWith(height: 1.4, color: Colors.white),
@@ -105,12 +112,27 @@ class _UserBubble extends StatelessWidget {
   }
 }
 
+/// Распознаватель пишет речь строчными: «позвони маме». На экране реплика
+/// начинается с заглавной, как написал бы человек.
+String _sentence(String text) =>
+    text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
+
 class _AssistantReply extends StatelessWidget {
-  const _AssistantReply(this.message, {this.onSpeak, this.onTyping});
+  const _AssistantReply(
+    this.message, {
+    this.onSpeak,
+    this.onTyping,
+    this.onConfirm,
+    this.onReject,
+    this.showActions = true,
+  });
 
   final ChatMessage message;
   final ValueChanged<String>? onSpeak;
   final VoidCallback? onTyping;
+  final VoidCallback? onConfirm;
+  final VoidCallback? onReject;
+  final bool showActions;
 
   @override
   Widget build(BuildContext context) {
@@ -141,28 +163,17 @@ class _AssistantReply extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 4, right: 10),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.5),
-                  blurRadius: 12,
-                ),
-              ],
-            ),
-            child: const AssistantAvatar(size: 30),
-          ),
+        const Padding(
+          padding: EdgeInsets.only(top: 2, right: 12),
+          child: AssistantAvatar(size: 28),
         ),
         Flexible(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GlassPanel(
-                radius: 20,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              // Ответ — просто текст, как речь: без рамки и подложки.
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -192,10 +203,65 @@ class _AssistantReply extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 6),
-              _Actions(text: message.text, onSpeak: onSpeak),
+              if (onConfirm != null && onReject != null) ...[
+                const SizedBox(height: 12),
+                _ConfirmButtons(onConfirm: onConfirm!, onReject: onReject!),
+              ],
+              if (showActions) ...[
+                const SizedBox(height: 6),
+                _Actions(text: message.text, onSpeak: onSpeak),
+              ],
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// «Отправить» и «Отмена» — ответить на вопрос помощника касанием.
+/// Голосом «да» и «отмена» по-прежнему работают.
+class _ConfirmButtons extends StatelessWidget {
+  const _ConfirmButtons({required this.onConfirm, required this.onReject});
+
+  final VoidCallback onConfirm;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.akyl;
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        FilledButton.icon(
+          onPressed: () {
+            HapticFeedback.mediumImpact();
+            onConfirm();
+          },
+          icon: const Icon(LucideIcons.send, size: 16),
+          label: const Text('Отправить'),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF6D4AE0),
+            foregroundColor: Colors.white,
+            minimumSize: const Size(0, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            shape: const StadiumBorder(),
+          ),
+        ),
+        OutlinedButton(
+          onPressed: () {
+            HapticFeedback.selectionClick();
+            onReject();
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: c.textPrimary,
+            side: BorderSide(color: c.borderStrong),
+            minimumSize: const Size(0, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            shape: const StadiumBorder(),
+          ),
+          child: const Text('Отмена'),
         ),
       ],
     );
