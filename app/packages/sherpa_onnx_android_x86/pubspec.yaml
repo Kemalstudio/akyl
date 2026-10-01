@@ -1,0 +1,9 @@
+name: sherpa_onnx_android_x86
+description: >
+  Пустая замена пакета sherpa-onnx для x86. Приложение собирается под
+  arm64; на других процессорах работает системное распознавание.
+version: 1.13.8
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
