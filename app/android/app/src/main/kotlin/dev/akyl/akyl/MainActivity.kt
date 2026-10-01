@@ -1,46 +1,38 @@
 package dev.akyl.akyl
 
+import android.content.Context
 import android.content.Intent
-
+import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugin.common.EventChannel
-import io.flutter.plugin.common.MethodChannel
 
+/**
+ * Экран подключается к движку уровня процесса (VoiceEngine) и не владеет
+ * им: закрыли экран — голос, диалог и навыки продолжают работать, если
+ * включён фоновый режим.
+ */
 class MainActivity : FlutterActivity() {
 
-    private var phoneBridge: PhoneBridge? = null
-    private var ttsBridge: TtsBridge? = null
-    private var handsFreeChannel: MethodChannel? = null
-    private var micBridge: MicBridge? = null
-    private var micChannel: EventChannel? = null
+    override fun provideFlutterEngine(context: Context): FlutterEngine =
+        VoiceEngine.ensure(context)
 
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        super.configureFlutterEngine(flutterEngine)
+    /** Движок переживает экран: его освобождает только гибель процесса. */
+    override fun shouldDestroyEngineWithHost(): Boolean = false
 
-        val messenger = flutterEngine.dartExecutor.binaryMessenger
-        handsFreeChannel = MethodChannel(messenger, HandsFreeBridge.CHANNEL).also {
-            it.setMethodCallHandler(HandsFreeBridge(this))
-        }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        ActivityHolder.attach(this)
+        super.onCreate(savedInstanceState)
+    }
 
-        val phone = PhoneBridge(this).also { phoneBridge = it }
-        MethodChannel(messenger, PhoneBridge.CHANNEL).setMethodCallHandler(phone)
+    override fun onStart() {
+        ActivityHolder.attach(this)
+        ActivityHolder.visible = true
+        super.onStart()
+    }
 
-        MethodChannel(messenger, ContactsBridge.CHANNEL)
-            .setMethodCallHandler(ContactsBridge(this))
-
-        MethodChannel(messenger, DeviceBridge.CHANNEL)
-            .setMethodCallHandler(DeviceBridge(this))
-
-        micBridge = MicBridge(this)
-        micChannel = EventChannel(messenger, MicBridge.CHANNEL).also {
-            it.setStreamHandler(micBridge)
-        }
-
-        MethodChannel(messenger, CareBridge.CHANNEL).setMethodCallHandler(CareBridge(this))
-
-        val tts = TtsBridge(this).also { ttsBridge = it }
-        MethodChannel(messenger, TtsBridge.CHANNEL).setMethodCallHandler(tts)
+    override fun onStop() {
+        ActivityHolder.visible = false
+        super.onStop()
     }
 
     override fun onRequestPermissionsResult(
@@ -49,26 +41,18 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray,
     ) {
         // Сначала наш мост: если код запроса его, Flutter об этом знать не нужно.
-        if (phoneBridge?.onRequestPermissionsResult(requestCode) == true) return
+        if (VoiceEngine.phone?.onRequestPermissionsResult(requestCode) == true) return
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-    }
-
-    override fun onDestroy() {
-        micBridge?.stopCapture()
-        micChannel?.setStreamHandler(null)
-        micBridge = null
-        micChannel = null
-        handsFreeChannel?.setMethodCallHandler(null)
-        handsFreeChannel = null
-        ttsBridge?.dispose()
-        ttsBridge = null
-        phoneBridge?.dispose()
-        phoneBridge = null
-        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handsFreeChannel?.invokeMethod("commandAvailable", null)
+        // Жест помощника при открытом приложении: Dart заберёт команду.
+        if (intent.hasCategory(Intent.CATEGORY_VOICE)) VoiceEvents.emit("assist")
+    }
+
+    override fun onDestroy() {
+        ActivityHolder.detach(this)
+        super.onDestroy()
     }
 }
