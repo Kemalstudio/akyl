@@ -23,11 +23,8 @@ class StatusStrip extends StatelessWidget {
       DialogState.listening => ('Слушаю', c.accent, true),
       DialogState.processing => ('Думаю', c.textSecondary, true),
       DialogState.executing => ('Выполняю', c.textSecondary, true),
-      DialogState.awaitingConfirmation => (
-        'Жду подтверждения — скажите «да» или «отмена»',
-        c.accent,
-        false,
-      ),
+      // Вопрос и кнопки ответа уже в самой реплике — не дублируем.
+      DialogState.awaitingConfirmation => (null, c.accent, false),
       DialogState.awaitingChoice => ('Жду выбора', c.accent, false),
       DialogState.idle => (null, c.textMuted, false),
     };
