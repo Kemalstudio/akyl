@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../domain/dialog/dialog_state.dart';
 import '../assistant_controller.dart';
 import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 import '../widgets/akyl_mark.dart';
+import '../widgets/alym_logo.dart';
 import '../widgets/composer.dart';
 import '../widgets/cosmic.dart';
 import '../widgets/glass_background.dart';
@@ -13,6 +16,7 @@ import '../widgets/message_tile.dart';
 import '../widgets/status_strip.dart';
 import 'assistant_settings.dart';
 import 'skills_screen.dart';
+import 'voice_settings_screen.dart';
 
 /// Главный экран в духе ChatGPT (ТЗ, FR-10).
 ///
@@ -97,6 +101,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final empty = history.isEmpty;
     final awaiting = controller.state.isAwaiting;
     final idle = !controller.busy && !controller.listening;
+    final voice = controller.voice;
+    // Клавиатура открыта: приветствие и нижняя панель уходят, поле ввода
+    // стоит прямо над клавиатурой. Высоту даёт сам Scaffold (adjustResize),
+    // без жёстких отступов.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final intro = empty && !keyboard;
     _measureDock();
 
     void openSettings() => Navigator.of(context).push(
@@ -122,9 +132,14 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 children: [
                   _TopBar(
+                    voice: voice,
                     onMenu: () => _scaffold.currentState?.openDrawer(),
                     onSettings: idle ? openSettings : null,
-                    onNewChat: empty ? null : controller.startNewConversation,
+                    onStatus: () => Navigator.of(context).push(
+                      SoftPageRoute<void>(
+                        builder: (_) => VoiceSettingsScreen(voice: voice),
+                      ),
+                    ),
                   ),
                   // Полоса не выталкивает разговор рывком: высота
                   // набирается плавно.
@@ -155,104 +170,93 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _dockHeight + 12,
                               ),
                               itemCount: history.length,
-                              itemBuilder: (_, i) => MessageTile(
-                                message: history[i],
-                                onSpeak: controller.speakAgain,
-                                onTyping: i == history.length - 1
-                                    ? () => _scrollToBottom(animate: false)
-                                    : null,
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Цитата и нижняя панель — только на пустом экране:
-                        // в разговоре место отдано переписке.
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: IgnorePointer(
-                            ignoring: !empty,
-                            child: AnimatedSlide(
-                              duration: AkylMotion.slow,
-                              curve: Curves.easeInOutCubic,
-                              offset: empty
-                                  ? Offset.zero
-                                  : const Offset(0, 1.3),
-                              child: AnimatedOpacity(
-                                duration: AkylMotion.base,
-                                opacity: empty ? 1 : 0,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const _Quote(),
-                                    _BottomNav(
-                                      level: controller.soundLevel,
-                                      listening: controller.listening,
-                                      onVoice: controller.voiceAvailable
-                                          ? (controller.listening
-                                                ? controller.stopListening
-                                                : controller.listen)
-                                          : null,
-                                      onSkills: openSkills,
-                                      onHistory: () =>
-                                          _scaffold.currentState?.openDrawer(),
-                                      onProfile: idle ? openSettings : null,
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              itemBuilder: (_, i) {
+                                final last = i == history.length - 1;
+                                final asking =
+                                    last &&
+                                    controller.state ==
+                                        DialogState.awaitingConfirmation;
+                                return MessageTile(
+                                  message: history[i],
+                                  showActions: last,
+                                  onSpeak: controller.speakAgain,
+                                  onTyping: last
+                                      ? () => _scrollToBottom(animate: false)
+                                      : null,
+                                  onConfirm: asking ? () => _send('да') : null,
+                                  onReject: asking ? controller.cancel : null,
+                                );
+                              },
                             ),
                           ),
                         ),
                         AnimatedAlign(
                           duration: AkylMotion.slow,
                           curve: Curves.easeInOutCubic,
-                          alignment: empty
+                          alignment: intro
                               ? const Alignment(0, -0.55)
                               : Alignment.bottomCenter,
-                          child: _Dock(
-                            key: _dockKey,
-                            docked: !empty,
-                            header: _Greeting(level: controller.soundLevel),
-                            footer: controller.simpleMode
-                                ? _BigActions(
-                                    relatives: [
-                                      for (final entry
-                                          in controller.relationships.entries)
-                                        (
-                                          role: entry.key,
-                                          name:
-                                              controller.contacts
-                                                  .where(
-                                                    (c) => c.id == entry.value,
-                                                  )
-                                                  .firstOrNull
-                                                  ?.displayName ??
-                                              entry.key,
-                                        ),
-                                    ],
-                                    onPick: _send,
-                                  )
-                                : _Suggestions(onPick: _send),
-                            status: StatusStrip(
-                              state: controller.state,
-                              busy: controller.busy,
-                            ),
-                            composer: Composer(
-                              controller: _input,
-                              onSubmit: _send,
-                              onListen: controller.listen,
-                              onStopListening: controller.stopListening,
-                              busy: controller.busy,
-                              listening: controller.listening,
-                              awaiting: awaiting,
-                              voiceAvailable: controller.voiceAvailable,
-                              wakeListening: controller.wakeListening,
-                              level: controller.soundLevel,
-                              partialText: controller.partialText,
-                              onCancel: awaiting ? controller.cancel : null,
+                          // Прокрутка всегда в дереве (иначе смена клавиатуры
+                          // пересоздала бы поле ввода и сняла фокус), но
+                          // включается, только если приветствие не влезает.
+                          child: SingleChildScrollView(
+                            physics: intro
+                                ? const ClampingScrollPhysics()
+                                : const NeverScrollableScrollPhysics(),
+                            child: _Dock(
+                              key: _dockKey,
+                              docked: !intro,
+                              header: _Greeting(voice: voice),
+                              footer: controller.simpleMode
+                                  ? _BigActions(
+                                      relatives: [
+                                        for (final entry
+                                            in controller.relationships.entries)
+                                          (
+                                            role: entry.key,
+                                            name:
+                                                controller.contacts
+                                                    .where(
+                                                      (c) =>
+                                                          c.id == entry.value,
+                                                    )
+                                                    .firstOrNull
+                                                    ?.displayName ??
+                                                entry.key,
+                                          ),
+                                      ],
+                                      onPick: _send,
+                                    )
+                                  : _Suggestions(
+                                      onPick: _send,
+                                      onMore: openSkills,
+                                    ),
+                              status: StatusStrip(
+                                state: controller.state,
+                                busy: controller.busy,
+                              ),
+                              composer: Composer(
+                                controller: _input,
+                                onSubmit: _send,
+                                onListen: controller.listen,
+                                onStopListening: controller.stopListening,
+                                busy: controller.busy,
+                                listening: controller.listening,
+                                awaiting: awaiting,
+                                voiceAvailable: controller.voiceAvailable,
+                                voicePhase: voice.phase,
+                                wakePhrase: voice.settings.wakePhrase,
+                                onStopSpeaking: voice.stopSpeaking,
+                                level: controller.soundLevel,
+                                partialText: controller.partialText,
+                                // На «отправить?» отвечают кнопками в самой
+                                // реплике; «Отмена» под полем — только для выбора.
+                                onCancel:
+                                    controller.state ==
+                                        DialogState.awaitingChoice
+                                    ? controller.cancel
+                                    : null,
+                              ),
                             ),
                           ),
                         ),
@@ -269,18 +273,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Шапка как в макете: круглые стеклянные кнопки по краям, в центре —
-/// стеклянная «пилюля» со знаком и названием.
+/// Шапка: по одной круглой кнопке с каждой стороны, в центре — знак и
+/// живая точка состояния голоса. Симметрия важнее лишней кнопки: новый
+/// разговор начинается из панели истории.
 class _TopBar extends StatelessWidget {
   const _TopBar({
+    required this.voice,
     required this.onMenu,
     required this.onSettings,
-    required this.onNewChat,
+    required this.onStatus,
   });
 
+  final VoiceManager voice;
   final VoidCallback onMenu;
   final VoidCallback? onSettings;
-  final VoidCallback? onNewChat;
+  final VoidCallback onStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -290,51 +297,66 @@ class _TopBar extends StatelessWidget {
       letterSpacing: -0.3,
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: FadeSlideIn(
         offset: -8,
         child: SizedBox(
           height: 48,
-          child: Stack(
-            alignment: Alignment.center,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  GlassCircleButton(
-                    icon: LucideIcons.menu,
-                    tooltip: 'История разговоров',
-                    onPressed: onMenu,
-                  ),
-                  const Spacer(),
-                  GlassCircleButton(
-                    icon: LucideIcons.slidersHorizontal,
-                    tooltip: 'Настройки',
-                    onPressed: onSettings,
-                  ),
-                  const SizedBox(width: 10),
-                  GlassCircleButton(
-                    icon: LucideIcons.squarePen,
-                    tooltip: 'Новый разговор',
-                    onPressed: onNewChat,
-                  ),
-                ],
+              GlassCircleButton(
+                icon: LucideIcons.menu,
+                tooltip: 'История разговоров',
+                onPressed: onMenu,
               ),
-              GlassPanel(
-                radius: 23,
-                padding: const EdgeInsets.fromLTRB(14, 11, 18, 11),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ShaderMask(
-                      blendMode: BlendMode.srcIn,
-                      shaderCallback: AkylGradients.brand.createShader,
-                      child: const AkylMark(size: 20, color: Colors.white),
+              Expanded(
+                child: Center(
+                  child: Semantics(
+                    button: true,
+                    label: 'Alym AI. ${voice.notificationText}',
+                    child: GestureDetector(
+                      onTap: onStatus,
+                      child: GlassPanel(
+                        radius: 23,
+                        padding: const EdgeInsets.fromLTRB(14, 11, 16, 11),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ShaderMask(
+                              blendMode: BlendMode.srcIn,
+                              shaderCallback: AkylGradients.brand.createShader,
+                              child: const AkylMark(
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 9),
+                            ExcludeSemantics(
+                              child: Text(
+                                'Alym ',
+                                style: text?.copyWith(color: c.textPrimary),
+                              ),
+                            ),
+                            ExcludeSemantics(
+                              child: GradientText('AI', style: text),
+                            ),
+                            // Выключенный голос — без точки: серая точка
+                            // выглядела бы соринкой, а не состоянием.
+                            if (voice.phase != VoicePhase.disabled) ...[
+                              const SizedBox(width: 10),
+                              _StatusDot(phase: voice.phase),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 9),
-                    Text('Alym ', style: text?.copyWith(color: c.textPrimary)),
-                    GradientText('AI', style: text),
-                  ],
+                  ),
                 ),
+              ),
+              GlassCircleButton(
+                icon: LucideIcons.slidersHorizontal,
+                tooltip: 'Настройки',
+                onPressed: onSettings,
               ),
             ],
           ),
@@ -344,159 +366,42 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// Нижняя панель: разделы по краям, в центре — светящаяся кнопка голоса.
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({
-    required this.level,
-    required this.listening,
-    required this.onVoice,
-    required this.onSkills,
-    required this.onHistory,
-    required this.onProfile,
-  });
-
-  final ValueNotifier<double> level;
-  final bool listening;
-  final VoidCallback? onVoice;
-  final VoidCallback onSkills;
-  final VoidCallback onHistory;
-  final VoidCallback? onProfile;
+/// Точка состояния микрофона в шапке: видно издалека, слушает ли помощник.
+/// Зелёная — ждёт обращения, фиолетовая — разговор, красная — ошибка,
+/// серая — микрофон выключен.
+class _StatusDot extends StatefulWidget {
+  const _StatusDot({required this.phase});
+  final VoicePhase phase;
 
   @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 10 + bottom),
-      child: SizedBox(
-        height: 84,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.bottomCenter,
-          children: [
-            GlassPanel(
-              radius: 30,
-              child: SizedBox(
-                height: 72,
-                child: Row(
-                  children: [
-                    const _NavItem(
-                      icon: LucideIcons.house,
-                      label: 'Главная',
-                      active: true,
-                    ),
-                    _NavItem(
-                      icon: LucideIcons.search,
-                      label: 'Навыки',
-                      onTap: onSkills,
-                    ),
-                    const SizedBox(width: 84),
-                    _NavItem(
-                      icon: LucideIcons.clock,
-                      label: 'История',
-                      onTap: onHistory,
-                    ),
-                    _NavItem(
-                      icon: LucideIcons.userRound,
-                      label: 'Профиль',
-                      onTap: onProfile,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 8,
-              child: RepaintBoundary(
-                child: _VoiceOrbButton(
-                  level: level,
-                  listening: listening,
-                  onTap: onVoice,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  State<_StatusDot> createState() => _StatusDotState();
 }
 
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    this.onTap,
-    this.active = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.akyl;
-    final color = active ? c.accent : c.textMuted;
-    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: color,
-      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-    );
-    return Expanded(
-      child: InkResponse(
-        onTap: onTap,
-        radius: 32,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            active
-                ? ShaderMask(
-                    blendMode: BlendMode.srcIn,
-                    shaderCallback: AkylGradients.brand.createShader,
-                    child: Icon(icon, size: 22, color: Colors.white),
-                  )
-                : Icon(icon, size: 22, color: color),
-            const SizedBox(height: 5),
-            Text(label, style: style),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Центральная кнопка голоса: светящийся шар со знаком, вокруг —
-/// медленно пульсирующее кольцо; во время записи кольцо следует за голосом.
-class _VoiceOrbButton extends StatefulWidget {
-  const _VoiceOrbButton({
-    required this.level,
-    required this.listening,
-    required this.onTap,
-  });
-
-  final ValueNotifier<double> level;
-  final bool listening;
-  final VoidCallback? onTap;
-
-  @override
-  State<_VoiceOrbButton> createState() => _VoiceOrbButtonState();
-}
-
-class _VoiceOrbButtonState extends State<_VoiceOrbButton>
+class _StatusDotState extends State<_StatusDot>
     with SingleTickerProviderStateMixin {
   late final _pulse = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2200),
+    duration: const Duration(milliseconds: 1800),
   );
-  bool _down = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (ambientMotion(context)) {
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_StatusDot old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.phase.micActive && ambientMotion(context)) {
       if (!_pulse.isAnimating) _pulse.repeat();
     } else {
       _pulse.stop();
+      _pulse.value = 0;
     }
   }
 
@@ -508,119 +413,28 @@ class _VoiceOrbButtonState extends State<_VoiceOrbButton>
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: widget.listening ? 'Остановить запись' : 'Сказать голосом',
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _down = true),
-        onTapCancel: () => setState(() => _down = false),
-        onTapUp: (_) => setState(() => _down = false),
-        onTap: widget.onTap,
-        child: AnimatedScale(
-          scale: _down ? 0.92 : 1,
-          duration: const Duration(milliseconds: 140),
-          // Двигается только тонкое кольцо; шар с тенью неподвижен и не
-          // перерисовывается на каждом кадре.
-          child: SizedBox(
-            width: 84,
-            height: 84,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                RepaintBoundary(
-                  child: AnimatedBuilder(
-                    animation: Listenable.merge([_pulse, widget.level]),
-                    builder: (context, _) {
-                      final voice = widget.level.value;
-                      final p = _pulse.value;
-                      final size = 66 + 18 * p + 16 * voice;
-                      return Container(
-                        width: size,
-                        height: size,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(
-                              0xFFA78BFA,
-                            ).withValues(alpha: (1 - p) * 0.55),
-                            width: 1.5,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                RepaintBoundary(
-                  child: Container(
-                    width: 66,
-                    height: 66,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const RadialGradient(
-                        center: Alignment(-0.3, -0.4),
-                        colors: [
-                          Color(0xFFD9CCFF),
-                          Color(0xFF8B5CF6),
-                          Color(0xFF3B1E8F),
-                        ],
-                        stops: [0, 0.5, 1],
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.35),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFF8B5CF6,
-                          ).withValues(alpha: widget.listening ? 0.85 : 0.55),
-                          blurRadius: widget.listening ? 36 : 26,
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: widget.listening
-                          ? const Icon(
-                              LucideIcons.square,
-                              size: 18,
-                              color: Colors.white,
-                            )
-                          : const AkylMark(size: 24, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Строка внизу пустого экрана, как в макете.
-class _Quote extends StatelessWidget {
-  const _Quote();
-
-  @override
-  Widget build(BuildContext context) {
     final c = context.akyl;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 0, 28, 12),
-      child: FadeSlideIn(
-        delay: AkylMotion.stagger * 8,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(LucideIcons.sparkles, size: 16, color: c.accent),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                '«Хорошие вопросы\nоткрывают новые миры»',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelMedium?.copyWith(color: c.textMuted),
+    final color = switch (widget.phase) {
+      VoicePhase.listeningForWake => const Color(0xFF34D399),
+      VoicePhase.error => c.danger,
+      VoicePhase.recovering || VoicePhase.paused => const Color(0xFFFBBF24),
+      final p when p.inSession => const Color(0xFFA78BFA),
+      _ => c.textMuted,
+    };
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, _) => Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color,
+          boxShadow: [
+            if (widget.phase.micActive)
+              BoxShadow(
+                color: color.withValues(alpha: 0.6 * (1 - _pulse.value)),
+                spreadRadius: 5 * _pulse.value,
               ),
-            ),
           ],
         ),
       ),
@@ -628,9 +442,6 @@ class _Quote extends StatelessWidget {
   }
 }
 
-/// Блок с полем ввода. В центре над полем — приветствие, под ним —
-/// подсказки; внизу — только поле на мягкой подложке, под которую
-/// уходит прокручиваемый текст.
 class _Dock extends StatelessWidget {
   const _Dock({
     super.key,
@@ -716,9 +527,9 @@ class _Collapsible extends StatelessWidget {
 }
 
 class _Greeting extends StatelessWidget {
-  const _Greeting({required this.level});
+  const _Greeting({required this.voice});
 
-  final ValueNotifier<double> level;
+  final VoiceManager voice;
 
   @override
   Widget build(BuildContext context) {
@@ -736,7 +547,12 @@ class _Greeting extends StatelessWidget {
           FadeSlideIn(
             duration: AkylMotion.slow,
             offset: 20,
-            child: AssistantOrb(size: 78, level: level),
+            child: AlymLogo(
+              phase: voice.phase,
+              level: voice.level,
+              wakeCount: voice.diagnostics.wakeCount,
+              size: 62,
+            ),
           ),
           const SizedBox(height: 8),
           FadeSlideIn(
@@ -753,12 +569,160 @@ class _Greeting extends StatelessWidget {
           FadeSlideIn(
             delay: AkylMotion.stagger * 2,
             child: Text(
-              'Напишите или скажите «Макс» — я позвоню,\nнапишу или подскажу.',
+              voice.settings.wakeEnabled && voice.wakeAvailable
+                  ? 'Скажите ${WakePhrases.title(voice.settings.wakePhrase)} — '
+                        'я позвоню,\nнапишу или напомню.'
+                  : 'Нажмите на микрофон или напишите —\nя позвоню, напишу или напомню.',
               textAlign: TextAlign.center,
               style: text.bodyMedium?.copyWith(
                 color: c.textSecondary,
                 height: 1.5,
               ),
+            ),
+          ),
+          // Одно касание вместо поиска в настройках: обращение и фон сразу.
+          if (!voice.settings.wakeEnabled && voice.wakeAvailable)
+            FadeSlideIn(
+              delay: AkylMotion.stagger * 3,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: _EnableWakeButton(voice: voice),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Включить «Макс»»: обращение и работу в фоне — одним касанием.
+class _EnableWakeButton extends StatelessWidget {
+  const _EnableWakeButton({required this.voice});
+  final VoiceManager voice;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.akyl;
+    return Semantics(
+      button: true,
+      label: 'Включить обращение «Макс» без открытия приложения',
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          voice.updateSettings(
+            voice.settings.copyWith(wakeEnabled: true, background: true),
+          );
+        },
+        child: GlassPanel(
+          radius: 24,
+          highlighted: true,
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AkylGradients.button,
+                ),
+                child: const Icon(
+                  LucideIcons.ear,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  'Включить «Макс» — без открытия приложения',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Подсказки на пустом экране: ровная сетка 2×2 карточек с одинаковой
+/// высотой — не «лесенка» пилюль разной ширины. Касание сразу выполняет
+/// команду; «Все навыки» открывает полный список.
+class _Suggestions extends StatelessWidget {
+  const _Suggestions({required this.onPick, required this.onMore});
+
+  final ValueChanged<String> onPick;
+  final VoidCallback onMore;
+
+  /// Значок, заголовок, пояснение и сама команда.
+  static const _items = [
+    (LucideIcons.phone, 'Позвони маме', 'Звонок сразу', 'Позвони маме'),
+    (
+      LucideIcons.alarmClock,
+      'Будильник на 7:30',
+      'В «Часах» Android',
+      'Поставь будильник на 7:30',
+    ),
+    (
+      LucideIcons.bellRing,
+      'Напомни завтра',
+      'В 10 утра — позвонить',
+      'Напомни мне завтра в 10 позвонить маме',
+    ),
+    (
+      LucideIcons.calendar,
+      'Какое число',
+      'Скажу голосом',
+      'Какое сегодня число',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.akyl;
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        children: [
+          for (var row = 0; row < 2; row++) ...[
+            if (row > 0) const SizedBox(height: 10),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var col = 0; col < 2; col++) ...[
+                    if (col > 0) const SizedBox(width: 10),
+                    Expanded(
+                      child: FadeSlideIn(
+                        delay: AkylMotion.stagger * (3 + row * 2 + col),
+                        offset: 12,
+                        child: _SuggestionCard(
+                          icon: _items[row * 2 + col].$1,
+                          title: _items[row * 2 + col].$2,
+                          hint: _items[row * 2 + col].$3,
+                          onTap: () => onPick(_items[row * 2 + col].$4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: onMore,
+            icon: const Icon(LucideIcons.layoutGrid, size: 16),
+            label: const Text('Все навыки'),
+            style: TextButton.styleFrom(
+              foregroundColor: c.textSecondary,
+              minimumSize: const Size(0, 44),
             ),
           ),
         ],
@@ -767,105 +731,82 @@ class _Greeting extends StatelessWidget {
   }
 }
 
-/// Подсказки-«пилюли» под полем, как в макете: стекло, значок в
-/// градиентном круге, стрелка. Нажатие сразу выполняет команду.
-class _Suggestions extends StatelessWidget {
-  const _Suggestions({required this.onPick});
-
-  final ValueChanged<String> onPick;
-
-  /// Значок, подпись на пилюле и сама команда.
-  static const _items = [
-    (LucideIcons.phone, 'Позвони маме', 'Позвони маме'),
-    (LucideIcons.alarmClock, 'Будильник на 7:30', 'Поставь будильник на 7:30'),
-    (LucideIcons.flashlight, 'Включи фонарик', 'Включи фонарик'),
-    (LucideIcons.calendar, 'Какое сегодня число', 'Какое сегодня число'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 14),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (var i = 0; i < _items.length; i++)
-            FadeSlideIn(
-              delay: AkylMotion.stagger * (3 + i),
-              offset: 14,
-              child: _Pill(
-                icon: _items[i].$1,
-                label: _items[i].$2,
-                onTap: () => onPick(_items[i].$3),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Pill extends StatefulWidget {
-  const _Pill({required this.icon, required this.label, required this.onTap});
+class _SuggestionCard extends StatefulWidget {
+  const _SuggestionCard({
+    required this.icon,
+    required this.title,
+    required this.hint,
+    required this.onTap,
+  });
 
   final IconData icon;
-  final String label;
+  final String title, hint;
   final VoidCallback onTap;
 
   @override
-  State<_Pill> createState() => _PillState();
+  State<_SuggestionCard> createState() => _SuggestionCardState();
 }
 
-class _PillState extends State<_Pill> {
+class _SuggestionCardState extends State<_SuggestionCard> {
   bool _down = false;
 
   @override
   Widget build(BuildContext context) {
     final c = context.akyl;
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _down = true),
-      onTapCancel: () => setState(() => _down = false),
-      onTapUp: (_) => setState(() => _down = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _down ? 0.95 : 1,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOut,
-        child: GlassPanel(
-          radius: 26,
-          highlighted: _down,
-          padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: AkylGradients.button,
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.45),
-                      blurRadius: 10,
+    final text = Theme.of(context).textTheme;
+    return Semantics(
+      button: true,
+      label: '${widget.title}. ${widget.hint}',
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _down = true),
+        onTapCancel: () => setState(() => _down = false),
+        onTapUp: (_) => setState(() => _down = false),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          widget.onTap();
+        },
+        child: AnimatedScale(
+          scale: _down ? 0.97 : 1,
+          duration: AkylMotion.instant,
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: AkylMotion.instant,
+            padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+            decoration: BoxDecoration(
+              color: c.surface.withValues(alpha: _down ? 0.9 : 0.62),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: c.border.withValues(alpha: 0.7)),
+            ),
+            child: ExcludeSemantics(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: c.accent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                  ],
-                ),
-                child: Icon(widget.icon, size: 16, color: Colors.white),
+                    child: Icon(widget.icon, size: 17, color: c.accent),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelLarge,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.hint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelMedium?.copyWith(color: c.textMuted),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Text(
-                widget.label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Icon(LucideIcons.chevronRight, size: 15, color: c.textMuted),
-            ],
+            ),
           ),
         ),
       ),
@@ -907,30 +848,43 @@ class _BigActions extends StatelessWidget {
         color: c.textSecondary,
         onTap: () => onPick('кто звонил'),
       ),
-      _BigTile(
-        icon: LucideIcons.siren,
-        title: 'SOS',
-        subtitle: 'Звонок и SMS близким',
-        color: c.danger,
-        onTap: () => onPick('помогите'),
-      ),
     ];
+    // SOS — отдельно и во всю ширину: самая важная кнопка не должна
+    // оказаться «лишней» плиткой в сетке.
+    final sos = _BigTile(
+      icon: LucideIcons.siren,
+      title: 'SOS',
+      subtitle: 'Звонок и SMS близким с местом',
+      color: c.danger,
+      onTap: () => onPick('помогите'),
+    );
     return Padding(
       padding: const EdgeInsets.only(top: 18),
-      child: GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1.45,
+      child: Column(
         children: [
-          for (var i = 0; i < tiles.length; i++)
-            FadeSlideIn(
-              delay: AkylMotion.stagger * (3 + i),
-              offset: 8,
-              child: tiles[i],
-            ),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.45,
+            children: [
+              for (var i = 0; i < tiles.length; i++)
+                FadeSlideIn(
+                  delay: AkylMotion.stagger * (3 + i),
+                  offset: 8,
+                  child: tiles[i],
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          FadeSlideIn(
+            delay: AkylMotion.stagger * (3 + tiles.length),
+            offset: 8,
+            child: SizedBox(height: 96, width: double.infinity, child: sos),
+          ),
         ],
       ),
     );
