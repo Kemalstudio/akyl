@@ -3,8 +3,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../domain/voice/voice_phase.dart';
+import '../../domain/voice/voice_settings.dart';
 import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 import 'cosmic.dart';
@@ -26,7 +29,9 @@ class Composer extends StatefulWidget {
     required this.listening,
     required this.awaiting,
     required this.voiceAvailable,
-    this.wakeListening = false,
+    this.voicePhase = VoicePhase.disabled,
+    this.wakePhrase = WakePhrases.max,
+    this.onStopSpeaking,
     this.level,
     this.partialText = '',
     this.onCancel,
@@ -52,8 +57,14 @@ class Composer extends StatefulWidget {
   /// Распознавание доступно: иначе кнопки микрофона нет.
   final bool voiceAvailable;
 
-  /// Микрофон ждёт обращения «Макс».
-  final bool wakeListening;
+  /// Что сейчас делает голос — для строки состояния под полем.
+  final VoicePhase voicePhase;
+
+  /// Фраза обращения из настроек.
+  final String wakePhrase;
+
+  /// Остановить ответ, который сейчас звучит.
+  final VoidCallback? onStopSpeaking;
 
   /// Громкость голоса 0..1 во время записи.
   final ValueListenable<double>? level;
@@ -117,82 +128,99 @@ class _ComposerState extends State<Composer> {
       children: [
         // Стекло с бегущим бликом по кромке; в фокусе и во время записи
         // кромка и свечение ярче.
+        // Одна строка, как у лучших ассистентов: поле растёт с текстом, кнопка
+        // голоса/отправки — рядом. Строка состояния голоса появляется над
+        // полем, только когда есть что сказать.
         GlassPanel(
           radius: 28,
-          runningLight: true,
-          glow: true,
+          runningLight: widget.listening,
+          glow: focused || widget.listening,
           highlighted: focused || widget.listening,
-          padding: const EdgeInsets.fromLTRB(18, 6, 8, 8),
-          child: Stack(
+          padding: const EdgeInsets.fromLTRB(18, 6, 6, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Icon(
-                  LucideIcons.sparkle,
-                  size: 13,
-                  color: c.accent.withValues(alpha: 0.8),
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SoftSwitcher(
-                    alignment: Alignment.centerLeft,
-                    child: widget.listening
-                        ? _LiveTranscript(
-                            key: const ValueKey('transcript'),
-                            text: widget.partialText,
-                            level: widget.level,
-                          )
-                        : _Field(
-                            key: const ValueKey('field'),
-                            controller: widget.controller,
-                            focus: _focus,
-                            enabled: !widget.busy,
-                            awaiting: widget.awaiting,
-                            onSubmitted: _submit,
-                          ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
+              AnimatedSize(
+                duration: AkylMotion.quick,
+                curve: AkylMotion.move,
+                alignment: Alignment.topLeft,
+                child:
+                    _VoiceChip.describe(widget.voicePhase, widget.wakePhrase) ==
+                        null
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 6, bottom: 2),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: SoftSwitcher(
                             alignment: Alignment.centerLeft,
-                            child: widget.wakeListening && !widget.listening
-                                ? const _WakeChip(key: ValueKey('wake'))
-                                : const SizedBox(
-                                    key: ValueKey('none'),
-                                    height: 36,
-                                  ),
+                            child: _VoiceChip(
+                              key: ValueKey(widget.voicePhase),
+                              phase: widget.voicePhase,
+                              phrase: widget.wakePhrase,
+                            ),
                           ),
                         ),
                       ),
-                      if (widget.voiceAvailable &&
-                          _hasText &&
-                          !widget.listening)
-                        _IconButton(
-                          icon: LucideIcons.mic,
-                          tooltip: 'Сказать голосом',
-                          onPressed: widget.busy ? null : widget.onListen,
-                        ),
-                      const SizedBox(width: 6),
-                      _MainButton(
-                        busy: widget.busy,
-                        listening: widget.listening,
-                        sending: _hasText && !widget.listening,
-                        voiceAvailable: widget.voiceAvailable,
-                        level: widget.level,
-                        onPressed: switch ((widget.listening, _hasText)) {
-                          (true, _) => widget.onStopListening,
-                          (_, true) => _submit,
-                          _ => widget.onListen,
-                        },
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: SoftSwitcher(
+                        alignment: Alignment.centerLeft,
+                        child: widget.listening
+                            ? _LiveTranscript(
+                                key: const ValueKey('transcript'),
+                                text: widget.partialText,
+                                level: widget.level,
+                              )
+                            : _Field(
+                                key: const ValueKey('field'),
+                                controller: widget.controller,
+                                focus: _focus,
+                                enabled: !widget.busy,
+                                awaiting: widget.awaiting,
+                                onSubmitted: _submit,
+                              ),
                       ),
-                    ],
+                    ),
+                  ),
+                  if (widget.voiceAvailable && _hasText && !widget.listening)
+                    _IconButton(
+                      icon: LucideIcons.mic,
+                      tooltip: 'Сказать голосом',
+                      onPressed: widget.busy ? null : widget.onListen,
+                    ),
+                  const SizedBox(width: 4),
+                  _MainButton(
+                    busy: widget.busy,
+                    listening: widget.listening,
+                    speaking:
+                        widget.voicePhase == VoicePhase.speaking &&
+                        widget.onStopSpeaking != null,
+                    sending: _hasText && !widget.listening,
+                    voiceAvailable: widget.voiceAvailable,
+                    level: widget.level,
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      switch ((
+                        widget.listening,
+                        _hasText,
+                        widget.voicePhase == VoicePhase.speaking,
+                      )) {
+                        case (true, _, _):
+                          widget.onStopListening();
+                        case (_, true, _):
+                          _submit();
+                        case (_, _, true) when widget.onStopSpeaking != null:
+                          widget.onStopSpeaking!();
+                        default:
+                          widget.onListen();
+                      }
+                    },
                   ),
                 ],
               ),
@@ -452,19 +480,44 @@ class _VoiceBarsState extends State<_VoiceBars>
 }
 
 /// Пилюля «Скажите «Макс» ›» слева под полем, как в макете.
-class _WakeChip extends StatelessWidget {
-  const _WakeChip({super.key});
+/// Строка состояния голоса под полем: одна фраза о том, что происходит.
+/// Когда голос выключен — ничего, поле не должно выглядеть занятым.
+class _VoiceChip extends StatelessWidget {
+  const _VoiceChip({super.key, required this.phase, required this.phrase});
+
+  final VoicePhase phase;
+  final String phrase;
+
+  static (IconData, String)? describe(VoicePhase phase, String phrase) =>
+      switch (phase) {
+        VoicePhase.listeningForWake => (
+          LucideIcons.ear,
+          'Скажите ${WakePhrases.title(phrase)}',
+        ),
+        VoicePhase.speaking => (LucideIcons.volume2, 'Отвечаю'),
+        VoicePhase.processing => (LucideIcons.sparkles, 'Выполняю'),
+        VoicePhase.starting => (LucideIcons.loader, 'Готовлю распознавание'),
+        VoicePhase.recovering => (
+          LucideIcons.refreshCw,
+          'Переподключаю микрофон',
+        ),
+        VoicePhase.paused => (LucideIcons.pause, 'Микрофон на паузе'),
+        VoicePhase.error => (LucideIcons.micOff, 'Микрофон недоступен'),
+        _ => null,
+      };
 
   @override
   Widget build(BuildContext context) {
     final c = context.akyl;
+    final (icon, label) = describe(phase, phrase)!;
+    final color = phase == VoicePhase.error ? c.danger : c.accent;
     return Container(
       height: 34,
-      padding: const EdgeInsets.fromLTRB(4, 0, 10, 0),
+      padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
       decoration: BoxDecoration(
-        color: c.accent.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: c.accent.withValues(alpha: 0.22)),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -474,20 +527,22 @@ class _WakeChip extends StatelessWidget {
             height: 26,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: c.accent.withValues(alpha: 0.18),
+              color: color.withValues(alpha: 0.18),
             ),
-            child: Icon(LucideIcons.ear, size: 14, color: c.accent),
+            child: Icon(icon, size: 14, color: color),
           ),
           const SizedBox(width: 8),
-          Text(
-            'Скажите «Макс»',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: c.accent,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-          const SizedBox(width: 4),
-          Icon(LucideIcons.chevronRight, size: 14, color: c.accent),
         ],
       ),
     );
@@ -526,6 +581,7 @@ class _MainButton extends StatelessWidget {
   const _MainButton({
     required this.busy,
     required this.listening,
+    required this.speaking,
     required this.sending,
     required this.voiceAvailable,
     required this.onPressed,
@@ -534,6 +590,9 @@ class _MainButton extends StatelessWidget {
 
   final bool busy;
   final bool listening;
+
+  /// Звучит ответ: кнопка останавливает его.
+  final bool speaking;
   final bool sending;
   final bool voiceAvailable;
   final VoidCallback onPressed;
@@ -542,82 +601,87 @@ class _MainButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.akyl;
-    final enabled = !busy && (sending || listening || voiceAvailable);
-    final filled = sending || listening;
+    final enabled =
+        speaking || (!busy && (sending || listening || voiceAvailable));
+    final filled = sending || listening || speaking;
 
-    final (icon, label) = switch ((listening, sending)) {
-      (true, _) => (LucideIcons.square, 'Остановить запись'),
-      (_, true) => (LucideIcons.arrowUp, 'Отправить'),
+    final (icon, label) = switch ((listening, sending, speaking)) {
+      (true, _, _) => (LucideIcons.square, 'Остановить запись'),
+      (_, true, _) => (LucideIcons.arrowUp, 'Отправить'),
+      (_, _, true) => (LucideIcons.square, 'Остановить ответ'),
       _ => (LucideIcons.audioLines, 'Сказать голосом'),
     };
 
     return Semantics(
       button: true,
       label: label,
-      child: GestureDetector(
-        onTap: enabled ? onPressed : null,
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              if (listening)
-                AnimatedBuilder(
-                  animation: level ?? const AlwaysStoppedAnimation(0.0),
-                  builder: (context, _) {
-                    final voice = level?.value ?? 0;
-                    return Container(
-                      width: 38 + 12 * voice,
-                      height: 38 + 12 * voice,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: c.accent.withValues(alpha: 0.18 + 0.2 * voice),
-                      ),
-                    );
-                  },
-                ),
-              AnimatedSwitcher(
-                duration: AkylMotion.quick,
-                switchInCurve: AkylMotion.enter,
-                transitionBuilder: (child, animation) =>
-                    ScaleTransition(scale: animation, child: child),
-                child: !enabled || busy
-                    ? Container(
-                        key: const ValueKey('idle'),
-                        width: 42,
-                        height: 42,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          onTap: enabled ? onPressed : null,
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (listening)
+                  AnimatedBuilder(
+                    animation: level ?? const AlwaysStoppedAnimation(0.0),
+                    builder: (context, _) {
+                      final voice = level?.value ?? 0;
+                      return Container(
+                        width: 38 + 12 * voice,
+                        height: 38 + 12 * voice,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: c.surfaceRaised,
+                          color: c.accent.withValues(alpha: 0.18 + 0.2 * voice),
                         ),
-                        child: Center(
-                          child: busy
-                              ? SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation(
-                                      c.textSecondary,
+                      );
+                    },
+                  ),
+                AnimatedSwitcher(
+                  duration: AkylMotion.quick,
+                  switchInCurve: AkylMotion.enter,
+                  transitionBuilder: (child, animation) =>
+                      ScaleTransition(scale: animation, child: child),
+                  child: !enabled || (busy && !speaking)
+                      ? Container(
+                          key: const ValueKey('idle'),
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: c.surfaceRaised,
+                          ),
+                          child: Center(
+                            child: busy && !speaking
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation(
+                                        c.textSecondary,
+                                      ),
                                     ),
-                                  ),
-                                )
-                              : Icon(icon, size: 19, color: c.textMuted),
+                                  )
+                                : Icon(icon, size: 19, color: c.textMuted),
+                          ),
+                        )
+                      : GlowCircle(
+                          key: ValueKey(icon),
+                          size: 42,
+                          glow: listening ? 1 : (filled ? 0.7 : 0.45),
+                          child: Icon(
+                            icon,
+                            size: listening ? 15 : 20,
+                            color: Colors.white,
+                          ),
                         ),
-                      )
-                    : GlowCircle(
-                        key: ValueKey(icon),
-                        size: 42,
-                        glow: listening ? 1 : (filled ? 0.7 : 0.45),
-                        child: Icon(
-                          icon,
-                          size: listening ? 15 : 20,
-                          color: Colors.white,
-                        ),
-                      ),
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
