@@ -13,11 +13,14 @@ import 'package:akyl/domain/ports/device_info.dart';
 import 'package:akyl/domain/ports/phone.dart';
 import 'package:akyl/domain/ports/speech_to_text.dart';
 import 'package:akyl/domain/ports/text_to_speech.dart';
+import 'package:akyl/domain/ports/voice_pipeline.dart';
+import 'package:akyl/domain/ports/voice_platform.dart';
 import 'package:akyl/skills/call_skill.dart';
 import 'package:akyl/skills/device_skills.dart';
 import 'package:akyl/skills/life_skills.dart';
 import 'package:akyl/skills/phone_control_skills.dart';
 import 'package:akyl/skills/sms_skill.dart';
+import 'package:akyl/skills/utility_skills.dart';
 
 /// Телефон, который ничего не делает, но помнит, о чём его просили.
 class FakePhone implements Phone {
@@ -136,9 +139,19 @@ class FakeStt implements SpeechToText {
   }
 }
 
+/// Голос ответа. [hold] — фраза не заканчивается, пока тест не вызовет
+/// [finishSpeaking]: так проверяются перебивание и заглушение микрофона.
 class FakeTts implements TextToSpeech {
+  FakeTts({this.hold = false});
+
+  bool hold;
   final List<String> spoken = [];
   bool _enabled = true;
+  Completer<void>? _speaking;
+  final _pulses = StreamController<double>.broadcast();
+  String? voice;
+
+  bool get isSpeaking => _speaking != null && !_speaking!.isCompleted;
 
   @override
   bool get enabled => _enabled;
@@ -151,13 +164,211 @@ class FakeTts implements TextToSpeech {
 
   @override
   Future<void> speak(String text) async {
-    if (_enabled) spoken.add(text);
+    if (!_enabled) return;
+    spoken.add(text);
+    if (!hold) return;
+    final done = _speaking = Completer<void>();
+    await done.future;
+  }
+
+  void finishSpeaking() {
+    final s = _speaking;
+    if (s != null && !s.isCompleted) s.complete();
+  }
+
+  void pulse() => _pulses.add(1);
+
+  @override
+  Future<void> stop() async {
+    stopCount++;
+    finishSpeaking();
+  }
+
+  int stopCount = 0;
+
+  @override
+  Stream<double> get speechPulses => _pulses.stream;
+
+  @override
+  Future<List<TtsVoice>> voices() async => const [
+    TtsVoice(name: 'ru-a', quality: 400),
+    TtsVoice(name: 'ru-b', quality: 300),
+  ];
+
+  @override
+  Future<void> setVoice(String? name) async => voice = name;
+}
+
+/// Конвейер, которым управляет тест: открыт ли микрофон, какой режим,
+/// и события — как их слал бы изолят с T-one.
+class FakePipeline implements VoicePipeline {
+  FakePipeline({this.failInit = false});
+
+  final bool failInit;
+  final _events = StreamController<PipelineEvent>.broadcast();
+  bool _ready = false;
+  bool _open = false;
+  int epoch = 0;
+  PipelineMode mode = PipelineMode.muted;
+  int opens = 0;
+  int closes = 0;
+  final modes = <PipelineMode>[];
+  MicConfig? mic;
+  PipelineConfig? config;
+  bool levels = false;
+
+  /// Следующее открытие микрофона завершится ошибкой.
+  Object? failNextOpen;
+
+  @override
+  Future<void> init() async {
+    if (failInit) throw const SpeechError('нет модели');
+    _ready = true;
   }
 
   @override
-  Future<void> stop() async => stopCount++;
+  bool get ready => _ready;
 
-  int stopCount = 0;
+  @override
+  bool get micOpen => _open;
+
+  @override
+  Stream<PipelineEvent> get events => _events.stream;
+
+  @override
+  Future<void> open(MicConfig mic) async {
+    final failure = failNextOpen;
+    if (failure != null) {
+      failNextOpen = null;
+      throw failure;
+    }
+    if (_open && this.mic == mic) return;
+    this.mic = mic;
+    if (!_open) opens++;
+    _open = true;
+  }
+
+  @override
+  Future<void> close() async {
+    if (!_open) return;
+    _open = false;
+    closes++;
+    mode = PipelineMode.muted;
+  }
+
+  @override
+  int setMode(PipelineMode mode, {int noSpeechMs = 8000}) {
+    this.mode = mode;
+    modes.add(mode);
+    return ++epoch;
+  }
+
+  @override
+  void configure(PipelineConfig config) => this.config = config;
+
+  @override
+  void setLevelsEnabled(bool enabled) => levels = enabled;
+
+  @override
+  Future<void> dispose() async {
+    await close();
+  }
+
+  // --- События от «изолята» ---------------------------------------------
+
+  void wake(String heard, {String command = ''}) {
+    // Как настоящее ядро: после имени оно само пишет команду.
+    mode = PipelineMode.command;
+    _events.add(
+      WakeDetected(epoch, heard: heard, command: command, latencyMs: 300),
+    );
+  }
+
+  void awaiting() => _events.add(AwaitingCommand(epoch));
+
+  void partial(String text) => _events.add(PartialText(epoch, text));
+
+  void finalText(String text, {int? atEpoch}) {
+    mode = PipelineMode.muted;
+    _events.add(FinalText(atEpoch ?? epoch, text, endpointMs: 700));
+  }
+
+  /// Обучение: записано слово (пустой отпечаток — не расслышал).
+  void captured(VoicePrint print, {int durationMs = 500}) {
+    mode = PipelineMode.muted;
+    _events.add(WordCaptured(epoch, print, durationMs: durationMs));
+  }
+
+  void bargeIn({String command = ''}) {
+    mode = PipelineMode.command;
+    _events.add(BargeIn(epoch, command: command));
+  }
+
+  /// Микрофон отказал: как настоящий конвейер, подписка снимается.
+  void fail(String message, {bool fatal = false}) {
+    _open = false;
+    _events.add(PipelineFailure(epoch, message, fatal: fatal));
+  }
+}
+
+/// Система телефона для тестов: служба, звонки, блокировка.
+class FakeVoicePlatform implements VoicePlatform {
+  final _events = StreamController<PlatformVoiceEvent>.broadcast();
+  bool serviceRunning = false;
+  bool allowService = true;
+  bool backgroundFlag = false;
+  int serviceStarts = 0;
+  int serviceStops = 0;
+  final cues = <VoiceCue>[];
+  final notifications = <String>[];
+  String? command;
+  bool locked = false;
+
+  void emit(PlatformVoiceEvent e) => _events.add(e);
+
+  @override
+  Stream<PlatformVoiceEvent> get events => _events.stream;
+
+  @override
+  Future<PlatformVoiceStatus> status() async =>
+      PlatformVoiceStatus(serviceRunning: serviceRunning, locked: locked);
+
+  @override
+  Future<bool> startService() async {
+    if (!allowService) return false;
+    serviceStarts++;
+    serviceRunning = true;
+    return true;
+  }
+
+  @override
+  Future<void> stopService() async {
+    serviceStops++;
+    serviceRunning = false;
+  }
+
+  @override
+  Future<void> updateNotification(String text) async => notifications.add(text);
+
+  @override
+  Future<void> setBackgroundEnabled(bool enabled) async =>
+      backgroundFlag = enabled;
+
+  @override
+  Future<void> playCue(VoiceCue cue) async => cues.add(cue);
+
+  @override
+  Future<void> selectAssistant() async {}
+
+  @override
+  Future<void> openBatterySettings() async {}
+
+  @override
+  Future<String?> takeCommand() async {
+    final c = command;
+    command = null;
+    return c;
+  }
 }
 
 /// Собранный ассистент этапа 1 — всё настоящее, кроме телефона.
@@ -204,7 +415,7 @@ class TestAssistant {
         TimeSkill(clock: () => DateTime(2026, 9, 28, 16, 45)),
         DateSkill(clock: () => DateTime(2026, 9, 28, 16, 45)),
         BatterySkill(device: FakeDeviceInfo()),
-        AlarmSkill(device: device),
+        AlarmSkill(device: device, clock: now),
         TimerSkill(device: device),
         FlashlightSkill(device: device),
         VolumeSkill(device: device),
@@ -223,6 +434,9 @@ class TestAssistant {
           device: device,
           relatives: () async => index.relatives,
         ),
+        CalculatorSkill(),
+        MediaSkill(device: device),
+        InternetOnlySkill(),
       ],
     );
     return TestAssistant._(machine, p, index, device, memory, reminders);
@@ -278,9 +492,17 @@ class FakeDeviceControl implements DeviceControl {
     (name: 'Ахмед', type: 'incoming'),
   ];
 
+  /// false — как будто «Часы» недоступны из фона.
+  bool clockApp = true;
+
   @override
-  Future<void> setAlarm(int hour, int minute) async =>
-      actions.add('alarm $hour:$minute');
+  Future<bool> setAlarm(int hour, int minute) async {
+    actions.add('alarm $hour:$minute');
+    return clockApp;
+  }
+
+  @override
+  Future<void> media(String action) async => actions.add('media $action');
 
   @override
   Future<void> setTimer(int seconds) async => actions.add('timer $seconds');
