@@ -115,9 +115,17 @@ Kotlin отвечает только за системные вызовы, вс�
 
 | Канал | Файл | Что делает |
 |---|---|---|
-| `dev.akyl/phone` | `PhoneBridge.kt` | разрешения, `ACTION_CALL`, `SmsManager` |
+| — | `VoiceEngine.kt` | один движок Flutter на процесс: Dart живёт без экрана |
+| `dev.akyl/mic` | `MicHub.kt` | единственный `AudioRecord`, 16 кГц, AEC/NS, «запись заглушена» |
+| `dev.akyl/voice` | `VoiceBridge.kt` | служба микрофона, блокировка, звонки, сигнал «слушаю» |
+| — | `VoiceService.kt` | foreground-служба microphone с уведомлением |
+| — | `AssistantVoiceService.kt` | роль помощника: запуск после перезагрузки |
+| `dev.akyl/phone` | `PhoneBridge.kt` | разрешения, `TelecomManager.placeCall`, `SmsManager` |
 | `dev.akyl/contacts` | `ContactsBridge.kt` | чтение `ContactsContract` |
-| `dev.akyl/tts` | `TtsBridge.kt` | системный `TextToSpeech` |
+| `dev.akyl/device` | `DeviceBridge.kt` | будильник, таймер, фонарик, громкость, плеер, журналы |
+| `dev.akyl/tts` | `TtsBridge.kt` | системный `TextToSpeech`, аудиофокус, ритм слов |
 
-Звонок идёт через `ACTION_CALL`, а не `ACTION_DIAL`: с экраном набора бюджет
-в одну секунду теряет смысл.
+Звонок идёт через `TelecomManager.placeCall`: он не запускает экран и
+поэтому работает из фона и с заблокированного телефона.
+
+Голосовой конвейер целиком — в [voice.md](voice.md).
