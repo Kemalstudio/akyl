@@ -156,9 +156,8 @@ class AssistantController extends ChangeNotifier {
   bool get wakeWordEnabled => _voice.settings.wakeEnabled;
   bool get ttsEnabled => _voice.settings.autoSpeak;
 
-  Future<void> setWakeWordEnabled(bool value) => _voice.updateSettings(
-    _voice.settings.copyWith(wakeEnabled: value),
-  );
+  Future<void> setWakeWordEnabled(bool value) =>
+      _voice.updateSettings(_voice.settings.copyWith(wakeEnabled: value));
 
   Future<void> setTtsEnabled(bool value) =>
       _voice.updateSettings(_voice.settings.copyWith(autoSpeak: value));
