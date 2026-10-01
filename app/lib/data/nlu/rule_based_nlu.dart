@@ -6,6 +6,7 @@ import '../contacts/morphology.dart';
 import 'device_commands.dart';
 import 'life_commands.dart';
 import 'turkmen_commands.dart';
+import 'utility_commands.dart';
 
 /// NLU на правилах — этап 1 (ТЗ, раздел 5).
 ///
@@ -277,6 +278,7 @@ class RuleBasedNlu implements Nlu {
     }
 
     return _tryCall(t, ctx) ??
+        UtilityCommands.parse(command) ??
         DeviceCommands.parse(command) ??
         LifeCommands.parse(command) ??
         _trySms(command, ctx) ??
