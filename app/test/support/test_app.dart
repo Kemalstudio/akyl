@@ -5,6 +5,8 @@ import 'package:akyl/data/contacts/in_memory_contacts_source.dart';
 import 'package:akyl/data/contacts/spoken_choice_resolver.dart';
 import 'package:akyl/data/nlu/rule_based_nlu.dart';
 import 'package:akyl/domain/dialog/dialog_machine.dart';
+import 'package:akyl/data/voice/voice_log.dart';
+import 'package:akyl/data/voice/voice_settings_store.dart';
 import 'package:akyl/presentation/assistant_controller.dart';
 import 'package:akyl/presentation/theme/akyl_theme.dart';
 import 'package:akyl/skills/call_skill.dart';
@@ -22,9 +24,12 @@ Future<AssistantController> buildTestController({
   FakePhone? phone,
   FakeTts? tts,
   FakeStt? stt,
+  FakePipeline? pipeline,
+  FakeVoicePlatform? platform,
   FakeConversationStore? store,
   bool wakeWord = false,
   bool simpleMode = false,
+  VoiceSettings? settings,
 }) async {
   final p = phone ?? FakePhone();
   final index = ContactIndex(contacts ?? InMemoryContactsSource.demo());
@@ -42,14 +47,24 @@ Future<AssistantController> buildTestController({
     ],
   );
 
+  final voice = VoiceManager(
+    pipeline: pipeline,
+    stt: stt ?? FakeStt(),
+    tts: tts ?? FakeTts(),
+    platform: platform ?? FakeVoicePlatform(),
+    store: MemoryVoiceSettingsStore(
+      settings ?? VoiceSettings(wakeEnabled: wakeWord),
+    ),
+    log: VoiceLog(echo: false),
+    guardAfterSpeech: Duration.zero,
+  );
+
   final controller = AssistantController(
     machine: machine,
     resolver: index,
-    tts: tts ?? FakeTts(),
-    stt: stt ?? FakeStt(),
+    voice: voice,
     phone: p,
     store: store ?? FakeConversationStore(),
-    wakeWordEnabled: wakeWord,
     simpleMode: simpleMode,
   );
   await controller.init();
