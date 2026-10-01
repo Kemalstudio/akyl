@@ -215,23 +215,35 @@ abstract final class AkylTheme {
         letterSpacing: -0.2,
         color: c.textPrimary,
       ),
+      // Трекинг задан явно: иначе ThemeData подмешивает геометрию Material
+      // (0.5 у bodyLarge), и широкий Nunito выглядит разреженным.
       bodyLarge: TextStyle(
         fontSize: 15.5,
         height: 1.5,
         fontWeight: FontWeight.w400,
+        letterSpacing: -0.1,
         color: c.textPrimary,
       ),
       bodyMedium: TextStyle(
         fontSize: 14.5,
         height: 1.5,
         fontWeight: FontWeight.w400,
+        letterSpacing: 0,
         color: c.textSecondary,
       ),
       labelLarge: TextStyle(
         fontSize: 14,
         height: 1.25,
         fontWeight: FontWeight.w700,
+        letterSpacing: 0,
         color: c.textPrimary,
+      ),
+      labelSmall: TextStyle(
+        fontSize: 11.5,
+        height: 1.2,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.1,
+        color: c.textMuted,
       ),
       labelMedium: TextStyle(
         fontSize: 12.5,
