@@ -5,7 +5,7 @@ import '../assistant_controller.dart';
 import '../theme/akyl_motion.dart';
 import '../theme/akyl_theme.dart';
 import '../widgets/akyl_mark.dart';
-import '../widgets/animated_assistant_icon.dart';
+import '../widgets/alym_logo.dart';
 import '../widgets/glass_background.dart';
 
 /// Экран входа: знак, обещание и запрос разрешений.
@@ -63,32 +63,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Spacer(flex: 3),
-                FadeSlideIn(
-                  child: Container(
-                    width: 104,
-                    height: 104,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: c.surface.withValues(alpha: 0.45),
-                      border: Border.all(
-                        color: c.accent.withValues(alpha: 0.35),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFF8B5CF6,
-                          ).withValues(alpha: 0.35),
-                          blurRadius: 40,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: const AnimatedAssistantIcon(
-                      asset: 'voice_wave',
-                      size: 64,
-                    ),
-                  ),
+                const FadeSlideIn(
+                  child: AlymLogo(phase: VoicePhase.disabled, size: 64),
                 ),
                 const SizedBox(height: 28),
                 FadeSlideIn(
@@ -271,14 +247,14 @@ class _PrimaryButton extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AkylShape.composer),
           gradient: const LinearGradient(
-            colors: [Color(0xFF7C3AED), Color(0xFFC026D3)],
+            colors: [Color(0xFF8B5CF6), Color(0xFF5B4BE6)],
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
-              blurRadius: 30,
-              spreadRadius: -8,
-              offset: const Offset(0, 12),
+              color: const Color(0xFF6D4AE0).withValues(alpha: 0.25),
+              blurRadius: 20,
+              spreadRadius: -10,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
