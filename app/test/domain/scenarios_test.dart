@@ -119,7 +119,7 @@ void main() {
     test('С8: непонятная фраза — ничего не выполняет', () async {
       final a = await TestAssistant.build();
 
-      final turn = await a.say('какая сегодня погода в ашхабаде');
+      final turn = await a.say('расскажи сказку про дракона');
 
       expect(turn.response, 'Не понял. Скажите, например: позвони маме');
       expect(a.phone.calls, isEmpty);
