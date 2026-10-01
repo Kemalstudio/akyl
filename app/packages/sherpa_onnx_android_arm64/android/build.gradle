@@ -1,0 +1,21 @@
+// Только готовые .so из jniLibs. Android Gradle Plugin берётся тот же, что
+// у приложения: свой buildscript из пакета на pub.dev требовал AGP 7.3.0
+// и тянул его зависимости из Maven Central.
+group = "com.k2fsa.sherpa.onnx.sherpa_onnx_android_arm64"
+version = "1.0"
+
+apply plugin: "com.android.library"
+
+android {
+    namespace = "com.k2fsa.sherpa.onnx.arm64"
+    compileSdk = 34
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        minSdk = 21
+    }
+}
