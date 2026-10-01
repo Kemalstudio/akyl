@@ -1,0 +1,17 @@
+name: sherpa_onnx_android_arm64
+description: >
+  Нативные библиотеки sherpa-onnx 1.13.8 для arm64-v8a. Копия пакета с pub.dev
+  без устаревшего buildscript (AGP 7.3.0), которому нужен Maven Central.
+  Файлы .so кладёт tools/copy_sherpa_libs.ps1.
+version: 1.13.8
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.3.0"
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        ffiPlugin: true
