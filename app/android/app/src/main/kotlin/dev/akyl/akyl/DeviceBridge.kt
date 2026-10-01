@@ -23,6 +23,7 @@ import android.os.BatteryManager
 import android.provider.AlarmClock
 import android.provider.CallLog
 import android.provider.ContactsContract
+import android.view.KeyEvent
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -51,12 +52,9 @@ class DeviceBridge(private val context: Context) : MethodChannel.MethodCallHandl
                 }
                 "isCharging" -> result.success(isCharging())
                 "setAlarm" -> {
-                    start(Intent(AlarmClock.ACTION_SET_ALARM)
-                        .putExtra(AlarmClock.EXTRA_HOUR, call.argument<Int>("hour")!!)
-                        .putExtra(AlarmClock.EXTRA_MINUTES, call.argument<Int>("minute")!!)
-                        .putExtra(AlarmClock.EXTRA_SKIP_UI, true),
-                        "Не нашёл приложение будильника")
-                    result.success(null)
+                    val hour = call.argument<Int>("hour")!!
+                    val minute = call.argument<Int>("minute")!!
+                    result.success(setAlarm(hour, minute))
                 }
                 "setTimer" -> {
                     start(Intent(AlarmClock.ACTION_SET_TIMER)
@@ -86,6 +84,10 @@ class DeviceBridge(private val context: Context) : MethodChannel.MethodCallHandl
                     result.success(recentCalls(call.argument<Int>("limit") ?: 3))
                 }
                 "openApp" -> result.success(openApp(call.argument<String>("query") ?: ""))
+                "media" -> {
+                    media(call.argument<String>("action") ?: "play")
+                    result.success(null)
+                }
                 "lastCallWith" -> {
                     if (!granted(Manifest.permission.READ_CALL_LOG)) {
                         throw UserError("Разрешите доступ к журналу звонков и повторите команду")
@@ -106,6 +108,48 @@ class DeviceBridge(private val context: Context) : MethodChannel.MethodCallHandl
     }
 
     private class UserError(message: String) : Exception(message)
+
+    /**
+     * «Часы» — если Android разрешит открыть их экран: приложение видно или
+     * Alym AI выбран помощником. Иначе (свёрнуто, телефон на подоконнике)
+     * запуск чужого экрана из фона молча блокируется — тогда будильник
+     * ставит сам помощник. Возвращает, кто будет звонить: clock | own.
+     */
+    private fun setAlarm(hour: Int, minute: Int): String {
+        if (ActivityHolder.visible || AssistantVoiceService.isSelected(context)) {
+            try {
+                context.startActivity(
+                    Intent(AlarmClock.ACTION_SET_ALARM)
+                        .putExtra(AlarmClock.EXTRA_HOUR, hour)
+                        .putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                        .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+                VoiceLog.i("ACTION", "будильник передан в «Часы»")
+                return "clock"
+            } catch (_: ActivityNotFoundException) {
+                // Нет приложения часов — звонить будет помощник.
+            }
+        }
+        AlarmRinger.schedule(context, hour, minute)
+        return "own"
+    }
+
+    /**
+     * Кнопки плеера, как на гарнитуре: Android передаёт их приложению,
+     * которое сейчас играет (или играло последним). Разрешений не нужно.
+     */
+    private fun media(action: String) {
+        val code = when (action) {
+            "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE
+            "next" -> KeyEvent.KEYCODE_MEDIA_NEXT
+            "previous" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            else -> KeyEvent.KEYCODE_MEDIA_PLAY
+        }
+        val audio = context.getSystemService(AudioManager::class.java)
+        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+    }
 
     /** Проверяет разрешение и, если его нет, сразу показывает системный запрос. */
     private fun granted(permission: String): Boolean {
