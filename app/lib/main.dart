@@ -31,6 +31,7 @@ import 'skills/device_skills.dart';
 import 'skills/life_skills.dart';
 import 'skills/phone_control_skills.dart';
 import 'skills/sms_skill.dart';
+import 'skills/utility_skills.dart';
 
 /// Точка входа и для экрана, и для фоновой службы: движок Flutter живёт
 /// на уровне процесса (VoiceEngine.kt), поэтому этот код запускается и
@@ -101,6 +102,9 @@ AssistantController buildController(SharedPreferences prefs) {
         device: control,
         relatives: () async => resolver.relatives,
       ),
+      CalculatorSkill(),
+      MediaSkill(device: control),
+      InternetOnlySkill(),
     ],
   );
 
