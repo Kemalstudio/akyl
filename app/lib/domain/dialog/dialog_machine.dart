@@ -133,7 +133,10 @@ class DialogMachine {
       Intent.remind ||
       Intent.listReminders ||
       Intent.cancelReminder ||
-      Intent.sos => await _dispatch(recognizedText, result),
+      Intent.sos ||
+      Intent.calculate ||
+      Intent.media ||
+      Intent.needsInternet => await _dispatch(recognizedText, result),
     };
 
     if (result.intent != Intent.repeat) _lastResponse = turn.response;
