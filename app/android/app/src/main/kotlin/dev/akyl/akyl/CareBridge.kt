@@ -303,6 +303,7 @@ class CareBootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != "android.intent.action.MY_PACKAGE_REPLACED") return
         Reminders.rearmAll(context)
+        AlarmRinger.rearmAll(context)
         BatteryWatch.arm(context)
     }
 }
