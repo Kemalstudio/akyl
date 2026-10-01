@@ -1,6 +1,8 @@
 import 'package:akyl/data/contacts/in_memory_contacts_source.dart';
 import 'package:akyl/presentation/screens/assistant_settings.dart';
 import 'package:akyl/presentation/screens/home_screen.dart';
+import 'package:akyl/presentation/screens/voice_settings_screen.dart';
+import 'package:akyl/presentation/voice_manager.dart';
 import 'package:akyl/presentation/screens/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +30,7 @@ void main() {
     String name, {
     Brightness brightness = Brightness.dark,
     bool settle = true,
+    Duration wait = const Duration(milliseconds: 350),
   }) async {
     await setPhoneSurface(tester);
     await tester.pumpWidget(wrapForTest(screen, brightness: brightness));
@@ -36,7 +39,7 @@ void main() {
     } else {
       // Пока идёт запись, кольцо вокруг кнопки пульсирует без конца —
       // pumpAndSettle такого не дождётся. Останавливаем кадр вручную.
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(wait);
     }
     await expectLater(
       find.byType(MaterialApp),
@@ -102,5 +105,27 @@ void main() {
     await controller.rememberRelationship('мама', '1');
     await controller.rememberRelationship('брат', '3');
     await snapshot(tester, HomeScreen(controller: controller), 'home_simple');
+  }, skip: !fonts);
+
+  testWidgets('Голос и обращение', (tester) async {
+    final controller = await buildTestController(
+      pipeline: FakePipeline(),
+      settings: const VoiceSettings(wakeEnabled: true, background: true),
+    );
+    await snapshot(
+      tester,
+      VoiceSettingsScreen(voice: controller.voice),
+      'voice_settings',
+      settle: false,
+      wait: const Duration(milliseconds: 1500),
+    );
+    // Таймер «микрофон стабилен» живёт 20 с — освобождаем голос сами.
+    controller.dispose();
+    await tester.pump(const Duration(seconds: 1));
+  }, skip: !fonts);
+
+  testWidgets('Обращение включается одним касанием', (tester) async {
+    final controller = await buildTestController(pipeline: FakePipeline());
+    await snapshot(tester, HomeScreen(controller: controller), 'home_wake_off');
   }, skip: !fonts);
 }
